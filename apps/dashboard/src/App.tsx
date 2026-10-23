@@ -4,6 +4,7 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { api, tokens, type Me } from './api';
 import { AppointmentsPage } from './pages/AppointmentsPage';
 import { AuditPage } from './pages/AuditPage';
+import { EncounterPage, PrescriptionPage } from './pages/EncounterPage';
 import { LoginPage } from './pages/LoginPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { PatientDetailPage, PatientsPage } from './pages/PatientsPage';
@@ -65,6 +66,8 @@ export function App() {
         <Routes>
           <Route path="/appointments" element={can('appointments.read') ? <AppointmentsPage can={can} /> : <Navigate to="/" />} />
           <Route path="/settings" element={can('staff.manage') ? <SettingsPage /> : <Navigate to="/" />} />
+          <Route path="/encounters/:id" element={can('clinical.read') ? <EncounterPage can={can} /> : <Navigate to="/" />} />
+          <Route path="/encounters/:id/prescription" element={can('clinical.read') ? <PrescriptionPage /> : <Navigate to="/" />} />
           <Route path="/patients" element={can('patients.read') ? <PatientsPage can={can} /> : <Navigate to="/" />} />
           <Route path="/patients/:id" element={can('patients.read') ? <PatientDetailPage can={can} /> : <Navigate to="/" />} />
           <Route path="/team" element={can('staff.manage') ? <TeamPage /> : <Navigate to="/" />} />

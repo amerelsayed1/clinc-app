@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ApiError, api, type Appointment, type Patient } from '../api';
+import { VITAL_KEYS, VITAL_KINDS, type VitalKind } from '@clinic/shared';
+import { ApiError, api, type Appointment, type EncounterSummary, type Patient } from '../api';
 import { fmtDateTime } from '../time';
 import { useSettings } from './AppointmentsPage';
 
@@ -146,8 +147,10 @@ export function PatientDetailPage({ can }: { can: (p: string) => boolean }) {
           {d.endedAt && (<><dt>Ended</dt><dd>{new Date(d.endedAt).toLocaleDateString()} by {d.endedBy}</dd></>)}
         </dl>
       )}
+      {can('clinical.read') && <PatientEncounters patient={d} canCreate={can('clinical.write') && d.status !== 'ended'} />}
+      {can('clinical.read') && <Trend patientId={d.id} />}
       {can('appointments.read') && <PatientAppointments id={d.id} />}
-      <p className="muted">Encounters, prescriptions and the medical timeline will appear here in the next features.</p>
+      <p className="muted">Documents and the combined medical timeline arrive in the next features.</p>
     </section>
   );
 }
@@ -182,6 +185,72 @@ function PatientAppointments({ id }: { id: string }) {
           ))}
         </tbody>
       </table>
+    </>
+  );
+}
+
+function PatientEncounters({ patient, canCreate }: { patient: Patient; canCreate: boolean }) {
+  const tz = useSettings().data?.timezone ?? 'Africa/Cairo';
+  const navigate = useNavigate();
+  const q = useQuery({ queryKey: ['encounters', patient.id], queryFn: () => api<EncounterSummary[]>(`/patients/${patient.id}/encounters`) });
+  const create = useMutation({
+    mutationFn: () => api<{ id: string }>(`/patients/${patient.id}/encounters`, { method: 'POST', body: {} }),
+    onSuccess: (e) => navigate(`/encounters/${e.id}`),
+  });
+  return (
+    <>
+      <div className="row" style={{ marginTop: '1.25rem' }}>
+        <h3 style={{ margin: 0 }}>Encounters</h3>
+        <span className="spacer" />
+        {canCreate && <button onClick={() => create.mutate()} disabled={create.isPending}>New encounter</button>}
+      </div>
+      {create.error && <p className="error">{(create.error as Error).message}</p>}
+      <table>
+        <tbody>
+          {q.data?.map((e) => (
+            <tr key={e.id}>
+              <td style={{ width: 170 }}><Link to={`/encounters/${e.id}`}>{fmtDateTime(e.encounterDate, tz)}</Link></td>
+              <td>{e.chiefComplaint || <span className="muted">(no complaint yet)</span>}{e.diagnosis && <div className="muted">{e.diagnosis}</div>}</td>
+              <td><span className={`pill ${e.status === 'signed' ? 'completed' : 'invited'}`}>{e.status === 'signed' ? `Signed v${e.currentVersion}` : 'Draft'}</span>{e.published && <span className="pill" style={{ marginLeft: 6 }}>Published</span>}</td>
+            </tr>
+          ))}
+          {q.data?.length === 0 && <tr><td className="muted">No encounters yet.</td></tr>}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
+function Trend({ patientId }: { patientId: string }) {
+  const tz = useSettings().data?.timezone ?? 'Africa/Cairo';
+  const [kind, setKind] = useState<VitalKind>('weight_kg');
+  const q = useQuery({ queryKey: ['trend', patientId, kind], queryFn: () => api<{ unit: string; points: { id: string; value: number; measuredAt: string }[] }>(`/patients/${patientId}/observations?kind=${kind}`) });
+  const pts = q.data?.points ?? [];
+  const vals = pts.map((p) => p.value);
+  const [lo, hi] = [Math.min(...vals), Math.max(...vals)];
+  const x = (i: number) => (pts.length === 1 ? 150 : 10 + (i * 280) / (pts.length - 1));
+  const y = (v: number) => (hi === lo ? 40 : 70 - ((v - lo) / (hi - lo)) * 60);
+  return (
+    <>
+      <div className="row" style={{ marginTop: '1.25rem' }}>
+        <h3 style={{ margin: 0 }}>Vitals trend</h3>
+        <select value={kind} onChange={(e) => setKind(e.target.value as VitalKind)} style={{ width: 'auto' }}>
+          {VITAL_KEYS.map((k) => <option key={k} value={k}>{VITAL_KINDS[k].label} ({VITAL_KINDS[k].unit})</option>)}
+        </select>
+      </div>
+      {pts.length === 0 ? <p className="muted">No measurements yet.</p> : (
+        <div className="trend">
+          <svg viewBox="0 0 300 80" width="300" height="80" role="img" aria-label={`${VITAL_KINDS[kind].label} over time`}>
+            <polyline fill="none" stroke="#0b5cd5" strokeWidth="2" points={pts.map((p, i) => `${x(i)},${y(p.value)}`).join(' ')} />
+            {pts.map((p, i) => <circle key={p.id} cx={x(i)} cy={y(p.value)} r="3" fill="#0b5cd5" />)}
+          </svg>
+          <table>
+            <tbody>
+              {[...pts].reverse().slice(0, 8).map((p) => <tr key={p.id}><td>{fmtDateTime(p.measuredAt, tz)}</td><td><strong>{p.value}</strong> {q.data?.unit}</td></tr>)}
+            </tbody>
+          </table>
+        </div>
+      )}
     </>
   );
 }

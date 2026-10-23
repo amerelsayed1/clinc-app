@@ -8,6 +8,7 @@ import { config } from './config.js';
 import { AppError } from './errors.js';
 import { adminRoutes } from './routes/admin.js';
 import { authRoutes } from './routes/auth.js';
+import { encounterRoutes } from './routes/encounters.js';
 import { meRoutes } from './routes/me.js';
 import { appointmentRoutes } from './routes/appointments.js';
 import { patientRoutes } from './routes/patients.js';
@@ -37,5 +38,6 @@ export async function buildApp(pool: pg.Pool, opts: { sms?: SmsSender; logger?: 
   patientRoutes(app, pool);
   appointmentRoutes(app, pool);
   settingsRoutes(app, pool);
+  encounterRoutes(app, pool);
   return app;
 }

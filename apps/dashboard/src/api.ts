@@ -119,10 +119,71 @@ export interface Appointment {
   status: AppointmentStatus;
   checkedInAt: string | null;
   cancelReason: string | null;
+  encounterId: string | null;
 }
 export type WorkingHours = Record<'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat', { start: string; end: string }[]>;
 export interface Settings {
   timezone: string;
   slotMinutes: number;
   workingHours: WorkingHours;
+}
+
+export interface Rx {
+  medication: string;
+  dose: string;
+  frequency: string;
+  duration: string;
+  notes: string;
+}
+export interface EncContent {
+  chiefComplaint: string;
+  history: string;
+  diagnosis: string;
+  plan: string;
+  privateNotes?: string; // absent unless the viewer is the doctor
+  prescriptions: Rx[];
+}
+export interface Observation {
+  id: string;
+  kind: string;
+  value: number;
+  unit: string;
+  measuredAt: string;
+  recordedBy: string;
+  recordedByName: string | null;
+  recordedRole: string;
+  voided: boolean;
+  voidReason: string | null;
+}
+export interface VersionMeta {
+  version: number;
+  authorName: string | null;
+  createdAt: string;
+  amendmentReason: string | null;
+  changedFields: string[];
+}
+export interface Encounter {
+  id: string;
+  patient: { id: string; fullName: string; patientNumber: number };
+  appointmentId: string | null;
+  author: { id: string; fullName: string | null };
+  encounterDate: string;
+  status: 'draft' | 'signed';
+  revision: number;
+  currentVersion: number;
+  signedAt: string | null;
+  publishedVersion: number | null;
+  content: EncContent;
+  version: VersionMeta;
+  observations: Observation[];
+}
+export interface EncounterSummary {
+  id: string;
+  encounterDate: string;
+  status: 'draft' | 'signed';
+  currentVersion: number;
+  published: boolean;
+  authorName: string | null;
+  chiefComplaint: string;
+  diagnosis: string;
 }

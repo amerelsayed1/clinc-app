@@ -5,13 +5,15 @@ import type { Permission } from '@clinic/shared';
 import { writeAudit } from '../audit.js';
 import { workspaceGuard } from '../auth.js';
 import { tx } from '../db.js';
+import { createDraftEncounter } from '../encounter-store.js';
 import { AppError, badRequest, conflict, notFound } from '../errors.js';
 import { loadSettings, withinWorkingHours } from './settings.js';
 
 const SELECT = `
   select a.id, a.care_relationship_id as patient_id, r.full_name, r.patient_number, p.phone,
          a.scheduled_at, a.duration_minutes, a.type, a.is_walk_in, a.reason, a.status,
-         a.checked_in_at, a.started_at, a.completed_at, a.cancelled_at, a.cancel_reason, a.created_at
+         a.checked_in_at, a.started_at, a.completed_at, a.cancelled_at, a.cancel_reason, a.created_at,
+         (select e.id from encounters e where e.appointment_id = a.id and e.status <> 'discarded') as encounter_id
     from appointments a
     join care_relationships r on r.id = a.care_relationship_id
     join patients p on p.id = r.patient_id`;
@@ -34,6 +36,7 @@ interface Row {
   cancelled_at: Date | null;
   cancel_reason: string | null;
   created_at: Date;
+  encounter_id: string | null;
 }
 const present = (r: Row) => ({
   id: r.id,
@@ -50,6 +53,7 @@ const present = (r: Row) => ({
   cancelledAt: r.cancelled_at,
   cancelReason: r.cancel_reason,
   createdAt: r.created_at,
+  encounterId: r.encounter_id,
 });
 
 const idParam = z.object({ id: z.string().uuid() });
@@ -232,7 +236,7 @@ export function appointmentRoutes(app: FastifyInstance, pool: pg.Pool) {
       const body = t.path === 'cancel' ? z.object({ reason: reasonSchema.optional() }).parse(req.body ?? {}) : {};
       const ws = req.workspace!;
       await tx(pool, async (c) => {
-        const cur = (await c.query('select status, scheduled_at from appointments where id = $1 and workspace_id = $2 for update', [id, ws.workspaceId])).rows[0];
+        const cur = (await c.query('select status, scheduled_at, care_relationship_id from appointments where id = $1 and workspace_id = $2 for update', [id, ws.workspaceId])).rows[0];
         if (!cur) throw notFound('Appointment not found');
         if (!t.from.includes(cur.status)) throw conflict('invalid_state', `Cannot ${t.path} an appointment that is ${cur.status}`);
         if (t.guard && cur.scheduled_at.getTime() > Date.now()) throw conflict('too_early', 'Cannot mark no-show before the appointment time');
@@ -240,6 +244,11 @@ export function appointmentRoutes(app: FastifyInstance, pool: pg.Pool) {
           `update appointments set status = $2, ${t.column ? `${t.column} = now(),` : ''} cancel_reason = coalesce($3, cancel_reason), updated_at = now() where id = $1`,
           [id, t.to, 'reason' in body ? body.reason || null : null],
         );
+        if (t.path === 'start') {
+          // F04-6: starting the consultation opens the draft encounter, authored by the doctor who started it.
+          const eid = await createDraftEncounter(c, { workspaceId: ws.workspaceId, relationshipId: cur.care_relationship_id, appointmentId: id, authorId: req.auth!.userId });
+          await writeAudit(c, { workspaceId: ws.workspaceId, actorId: req.auth!.userId, actorRole: ws.role, action: 'encounter.created', targetType: 'encounter', targetId: eid, metadata: { patientId: cur.care_relationship_id, appointmentId: id }, ip: req.ip });
+        }
         await writeAudit(c, { workspaceId: ws.workspaceId, actorId: req.auth!.userId, actorRole: ws.role, action: `appointment.${t.to}`, targetType: 'appointment', targetId: id, metadata: { from: cur.status }, ip: req.ip });
       });
       return present((await pool.query(`${SELECT} where a.id = $1`, [id])).rows[0]);

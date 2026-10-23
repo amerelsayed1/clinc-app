@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, api, type Appointment, type Patient, type Settings } from '../api';
 import { fmtTime, todayIn } from '../time';
 
@@ -24,6 +24,7 @@ export function AppointmentsPage({ can }: { can: (p: string) => boolean }) {
   const day = date ?? todayIn(tz);
   const [adding, setAdding] = useState(false);
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const list = useQuery({
     queryKey: ['appointments', day],
     queryFn: () => api<Appointment[]>(`/appointments?date=${day}`),
@@ -32,8 +33,11 @@ export function AppointmentsPage({ can }: { can: (p: string) => boolean }) {
   });
   const reload = () => qc.invalidateQueries({ queryKey: ['appointments'] });
   const act = useMutation({
-    mutationFn: ({ id, action, body }: { id: string; action: string; body?: object }) => api(`/appointments/${id}/${action}`, { method: 'POST', body: body ?? {} }),
-    onSuccess: reload,
+    mutationFn: ({ id, action, body }: { id: string; action: string; body?: object }) => api<Appointment>(`/appointments/${id}/${action}`, { method: 'POST', body: body ?? {} }),
+    onSuccess: (a, v) => {
+      reload();
+      if (v.action === 'start' && a.encounterId) navigate(`/encounters/${a.encounterId}`);
+    },
   });
 
   const all = list.data ?? [];
@@ -46,6 +50,7 @@ export function AppointmentsPage({ can }: { can: (p: string) => boolean }) {
     <span className="actions">
       {a.status === 'scheduled' && can('appointments.manage') && <button onClick={() => act.mutate({ id: a.id, action: 'check-in' })}>Check in</button>}
       {a.status === 'checked_in' && can('clinical.write') && <button onClick={() => act.mutate({ id: a.id, action: 'start' })}>Start consultation</button>}
+      {a.status === 'in_consultation' && a.encounterId && can('clinical.read') && <Link to={`/encounters/${a.encounterId}`}><button>Open encounter</button></Link>}
       {a.status === 'in_consultation' && can('clinical.write') && <button onClick={() => act.mutate({ id: a.id, action: 'complete' })}>Complete</button>}
       {a.status === 'scheduled' && can('appointments.manage') && new Date(a.scheduledAt) <= new Date() && <button onClick={() => act.mutate({ id: a.id, action: 'no-show' })}>No-show</button>}
       {(a.status === 'scheduled' || a.status === 'checked_in') && can('appointments.manage') && (
