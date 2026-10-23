@@ -6,7 +6,7 @@ interface Tokens {
 }
 
 export class ApiError extends Error {
-  constructor(public status: number, public code: string, message: string) {
+  constructor(public status: number, public code: string, message: string, public details?: any) {
     super(message);
   }
 }
@@ -55,7 +55,7 @@ export async function api<T = unknown>(path: string, init: { method?: string; bo
   if (res.status === 401 && t) tokens.set(null);
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
-    throw new ApiError(res.status, e.error ?? 'error', e.message ?? res.statusText);
+    throw new ApiError(res.status, e.error ?? 'error', e.message ?? res.statusText, e.details);
   }
   return (res.status === 204 ? undefined : await res.json().catch(() => undefined)) as T;
 }
@@ -105,4 +105,24 @@ export interface Patient {
   createdAt: string;
   endedAt: string | null;
   endedBy: 'workspace' | 'patient' | null;
+}
+
+export type AppointmentStatus = 'scheduled' | 'checked_in' | 'in_consultation' | 'completed' | 'cancelled' | 'no_show';
+export interface Appointment {
+  id: string;
+  patient: { id: string; fullName: string; patientNumber: number; phone: string };
+  scheduledAt: string;
+  durationMinutes: number;
+  type: 'new' | 'follow_up';
+  isWalkIn: boolean;
+  reason: string | null;
+  status: AppointmentStatus;
+  checkedInAt: string | null;
+  cancelReason: string | null;
+}
+export type WorkingHours = Record<'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat', { start: string; end: string }[]>;
+export interface Settings {
+  timezone: string;
+  slotMinutes: number;
+  workingHours: WorkingHours;
 }

@@ -8,7 +8,8 @@ export type StaffRole = Exclude<Role, 'doctor'>;
 export const PERMISSIONS = [
   'patients.read',
   'patients.write',
-  'appointments.manage',
+  'appointments.read',
+  'appointments.manage', // create, reschedule, check in, cancel, mark no-show
   'vitals.write',
   'documents.upload',
   'clinical.read',
@@ -22,8 +23,8 @@ export type Permission = (typeof PERMISSIONS)[number];
 
 export const ROLE_DEFAULTS: Record<Role, readonly Permission[]> = {
   doctor: PERMISSIONS,
-  nurse: ['patients.read', 'patients.write', 'vitals.write', 'documents.upload', 'clinical.read'],
-  receptionist: ['patients.read', 'patients.write', 'appointments.manage', 'documents.upload'],
+  nurse: ['patients.read', 'patients.write', 'appointments.read', 'vitals.write', 'documents.upload', 'clinical.read'],
+  receptionist: ['patients.read', 'patients.write', 'appointments.read', 'appointments.manage', 'documents.upload'],
 };
 
 // Actions that need a credential-verified doctor (spec 01, F01-3).

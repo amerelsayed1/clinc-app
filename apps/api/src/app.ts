@@ -9,7 +9,9 @@ import { AppError } from './errors.js';
 import { adminRoutes } from './routes/admin.js';
 import { authRoutes } from './routes/auth.js';
 import { meRoutes } from './routes/me.js';
+import { appointmentRoutes } from './routes/appointments.js';
 import { patientRoutes } from './routes/patients.js';
+import { settingsRoutes } from './routes/settings.js';
 import { workspaceRoutes } from './routes/workspaces.js';
 
 export async function buildApp(pool: pg.Pool, opts: { sms?: SmsSender; logger?: boolean } = {}) {
@@ -21,7 +23,7 @@ export async function buildApp(pool: pg.Pool, opts: { sms?: SmsSender; logger?: 
     if (err instanceof ZodError) {
       return reply.code(400).send({ error: 'validation_error', message: err.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') });
     }
-    if (err instanceof AppError) return reply.code(err.status).send({ error: err.code, message: err.message });
+    if (err instanceof AppError) return reply.code(err.status).send({ error: err.code, message: err.message, ...(err.details !== undefined && { details: err.details }) });
     app.log.error(err);
     return reply.code(500).send({ error: 'internal_error', message: 'Something went wrong' });
   });
@@ -33,5 +35,7 @@ export async function buildApp(pool: pg.Pool, opts: { sms?: SmsSender; logger?: 
   adminRoutes(app, pool);
   workspaceRoutes(app, pool, sms);
   patientRoutes(app, pool);
+  appointmentRoutes(app, pool);
+  settingsRoutes(app, pool);
   return app;
 }

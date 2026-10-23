@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ApiError, api, type Patient } from '../api';
+import { ApiError, api, type Appointment, type Patient } from '../api';
+import { fmtDateTime } from '../time';
+import { useSettings } from './AppointmentsPage';
 
 const STATUS_LABEL = { active: 'Active', invited: 'Awaiting patient confirmation', ended: 'Ended' } as const;
 const num = (n: number) => `P-${String(n).padStart(5, '0')}`;
@@ -144,6 +146,7 @@ export function PatientDetailPage({ can }: { can: (p: string) => boolean }) {
           {d.endedAt && (<><dt>Ended</dt><dd>{new Date(d.endedAt).toLocaleDateString()} by {d.endedBy}</dd></>)}
         </dl>
       )}
+      {can('appointments.read') && <PatientAppointments id={d.id} />}
       <p className="muted">Encounters, prescriptions and the medical timeline will appear here in the next features.</p>
     </section>
   );
@@ -162,5 +165,23 @@ function EditForm({ patient, onDone }: { patient: Patient; onDone: () => void })
       <label>Sex<select value={f.sex} onChange={(e) => setF({ ...f, sex: e.target.value as 'male' | 'female' | '' })}><option value="">—</option><option value="female">Female</option><option value="male">Male</option></select></label>
       <div><button disabled={m.isPending}>Save</button>{m.error && <p className="error">{(m.error as Error).message}</p>}</div>
     </form>
+  );
+}
+
+function PatientAppointments({ id }: { id: string }) {
+  const tz = useSettings().data?.timezone ?? 'Africa/Cairo';
+  const q = useQuery({ queryKey: ['patient-appointments', id], queryFn: () => api<Appointment[]>(`/appointments?patientId=${id}`) });
+  if (!q.data?.length) return null;
+  return (
+    <>
+      <h3>Appointments</h3>
+      <table>
+        <tbody>
+          {q.data.map((a) => (
+            <tr key={a.id}><td>{fmtDateTime(a.scheduledAt, tz)}</td><td>{a.type === 'follow_up' ? 'Follow-up' : 'New'}{a.isWalkIn ? ' · walk-in' : ''}</td><td><span className={`pill ${a.status}`}>{a.status.replace('_', ' ')}</span></td></tr>
+          ))}
+        </tbody>
+      </table>
+    </>
   );
 }

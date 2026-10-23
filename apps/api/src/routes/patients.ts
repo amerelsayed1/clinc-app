@@ -46,6 +46,15 @@ const present = (r: Row) => ({
   endedBy: r.ended_by,
 });
 
+/** Ending a relationship cancels appointments that have not started. */
+export async function cancelOpenAppointments(c: pg.PoolClient, relationshipId: string) {
+  await c.query(
+    `update appointments set status = 'cancelled', cancelled_at = now(), cancel_reason = 'Relationship ended', updated_at = now()
+      where care_relationship_id = $1 and status in ('scheduled', 'checked_in')`,
+    [relationshipId],
+  );
+}
+
 // Case/whitespace-insensitive name comparison used for duplicate suspicion.
 const NORM = `lower(regexp_replace(btrim(r.full_name), '\\s+', ' ', 'g'))`;
 
@@ -179,6 +188,7 @@ export function patientRoutes(app: FastifyInstance, pool: pg.Pool) {
         [id, ws.workspaceId],
       );
       if (r.rowCount === 0) throw notFound('Patient not found or already ended');
+      await cancelOpenAppointments(c, id);
       await writeAudit(c, { workspaceId: ws.workspaceId, actorId: req.auth!.userId, actorRole: ws.role, action: 'patient.relationship_ended', targetType: 'patient', targetId: id, metadata: { by: 'workspace' }, ip: req.ip });
     });
     return { ok: true };
@@ -239,6 +249,7 @@ export function patientRoutes(app: FastifyInstance, pool: pg.Pool) {
           `update care_relationships set status = $2, ended_by = case when $2 = 'ended' then 'patient' end, ended_at = case when $2 = 'ended' then now() end, updated_at = now() where id = $1`,
           [id, to],
         );
+        if (to === 'ended') await cancelOpenAppointments(c, id);
         await writeAudit(c, { workspaceId: r.workspace_id, actorId: userId, actorRole: 'patient', action: `patient.relationship_${PAST[action]}`, targetType: 'patient', targetId: id, ip: req.ip });
       });
       return { ok: true };

@@ -22,7 +22,7 @@
 |---|:-:|:-:|:-:|
 | Register / search patients | ✔ | ✔ | ✔ |
 | Edit demographics | ✔ | ✔ | ✔ |
-| Manage appointments / check-in | ✔ | view | ✔ |
+| Manage appointments / check-in | ✔ | view (`appointments.read`) | ✔ |
 | Record vitals / observations | ✔ | ✔ | ✘ |
 | Upload documents | ✔ | ✔ | ✔ (administrative types only) |
 | View clinical notes / diagnoses | ✔ | limited (configurable) | ✘ |

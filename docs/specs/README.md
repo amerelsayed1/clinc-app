@@ -29,7 +29,8 @@ Backend: Node.js (TypeScript, Fastify) + PostgreSQL. Clinic UI: React dashboard.
 | 01 Identity & Auth | **Done except:** MFA for doctors (F01-3), email, patient claim flow (F01-7, needs spec 03), phone change (F01-8) |
 | 02 Clinic & Staff | **Done** (F02-1…F02-6). Custom roles beyond per-permission denial are P1 |
 | 03 Patients & Relationships | **Done except:** manual duplicate merge (F03-5, needs record tables from spec 05/06 first; detection + override warning is done), dependents (out of MVP). Patient-side API exists (claim, accept, decline, end); no patient UI yet |
-| 04–10 | Not started |
+| 04 Appointments | **Done except:** pre-creating a draft encounter on start (F04-6, arrives with spec 05) and reminders / cancellation notices (F04-7, spec 10) |
+| 05–10 | Not started |
 | 11 Audit & Security | Audit log hash chain + append-only trigger done; remaining items arrive with their features |
 
 ## Cross-cutting rules

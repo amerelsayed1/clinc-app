@@ -43,3 +43,9 @@ code { background: #eef1f5; padding: .1rem .35rem; border-radius: 3px; }
 dl { display: grid; grid-template-columns: 140px 1fr; gap: .5rem 1rem; background: #fff; padding: 1rem; border: 1px solid #dde3ea; border-radius: 8px; }
 dt { color: #6b7a8c; } dd { margin: 0; }
 td a { color: #0b5cd5; text-decoration: none; }
+.pill.checked_in { background: #fff6dd; color: #8a6100; }
+.pill.in_consultation { background: #e2f5e9; color: #1b7a3d; }
+.pill.completed { background: #eef1f5; color: #46566a; }
+.pill.cancelled, .pill.no_show { background: #fde8e6; color: #b3261e; }
+.actions { display: inline-flex; gap: .4rem; flex-wrap: wrap; justify-content: flex-end; }
+h3 { margin: 1.25rem 0 .5rem; font-size: 1rem; }

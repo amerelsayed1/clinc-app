@@ -2,10 +2,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { api, tokens, type Me } from './api';
+import { AppointmentsPage } from './pages/AppointmentsPage';
 import { AuditPage } from './pages/AuditPage';
 import { LoginPage } from './pages/LoginPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { PatientDetailPage, PatientsPage } from './pages/PatientsPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { TeamPage } from './pages/TeamPage';
 
 function useAuthed() {
@@ -43,8 +45,10 @@ export function App() {
       <header>
         <strong>{membership.workspaceName ?? 'My Clinic'}</strong>
         <nav>
+          {can('appointments.read') && <NavLink to="/appointments">Appointments</NavLink>}
           {can('patients.read') && <NavLink to="/patients">Patients</NavLink>}
           {can('staff.manage') && <NavLink to="/team">Team</NavLink>}
+          {can('staff.manage') && <NavLink to="/settings">Settings</NavLink>}
           {can('audit.read') && <NavLink to="/audit">Audit log</NavLink>}
         </nav>
         <span className="spacer" />
@@ -59,6 +63,8 @@ export function App() {
       {user.doctorProfile?.verificationStatus === 'rejected' && <div className="banner error">Your licence verification was rejected: {user.doctorProfile.verificationNote ?? 'contact support'}.</div>}
       <main>
         <Routes>
+          <Route path="/appointments" element={can('appointments.read') ? <AppointmentsPage can={can} /> : <Navigate to="/" />} />
+          <Route path="/settings" element={can('staff.manage') ? <SettingsPage /> : <Navigate to="/" />} />
           <Route path="/patients" element={can('patients.read') ? <PatientsPage can={can} /> : <Navigate to="/" />} />
           <Route path="/patients/:id" element={can('patients.read') ? <PatientDetailPage can={can} /> : <Navigate to="/" />} />
           <Route path="/team" element={can('staff.manage') ? <TeamPage /> : <Navigate to="/" />} />
