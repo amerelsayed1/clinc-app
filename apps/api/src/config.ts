@@ -16,5 +16,9 @@ export const config = {
   accessTtlSeconds: 15 * 60,
   refreshTtlSeconds: 30 * 24 * 60 * 60,
   otp: { ttlSeconds: 5 * 60, maxAttempts: 5, maxRequestsPer15Min: 5 },
+  storageDir: process.env.STORAGE_DIR ?? '.data/objects',
+  // 32-byte master key (base64) that wraps per-file data keys. Required in production.
+  documentKey: Buffer.from(required('DOCUMENT_ENCRYPTION_KEY', Buffer.alloc(32, 7).toString('base64')), 'base64'),
+  documents: { maxFileBytes: 15 * 1024 * 1024, maxPages: 20, linkTtlSeconds: 10 * 60, patientQuotaBytes: 200 * 1024 * 1024 },
   invitationTtlSeconds: 7 * 24 * 60 * 60,
 };

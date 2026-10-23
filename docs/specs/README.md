@@ -30,8 +30,9 @@ Backend: Node.js (TypeScript, Fastify) + PostgreSQL. Clinic UI: React dashboard.
 | 02 Clinic & Staff | **Done** (F02-1…F02-6). Custom roles beyond per-permission denial are P1 |
 | 03 Patients & Relationships | **Done except:** manual duplicate merge (F03-5, needs record tables from spec 05/06 first; detection + override warning is done), dependents (out of MVP). Patient-side API exists (claim, accept, decline, end); no patient UI yet |
 | 04 Appointments | **Done except:** reminders / cancellation notices (F04-7, spec 10) |
-| 05 Encounters | **Done except:** linked documents (F05-1, arrives with spec 06), coded diagnosis lists (P1), offline-tolerant entry beyond autosave-with-conflict-detection (F05-9) |
-| 06–10 | Not started |
+| 05 Encounters | **Done except:** coded diagnosis lists (P1), offline-tolerant entry beyond autosave-with-conflict-detection (F05-9) |
+| 06 Documents | **Done except:** crop / auto-rotate in the capture UI (F06-1; images are only downscaled), a real malware scanner and S3-class storage (both are swappable interfaces with dev stand-ins), per-plan quotas (single placeholder limit until billing), patient UI (API only) |
+| 07–10 | Not started |
 | 11 Audit & Security | Audit log hash chain + append-only trigger done; remaining items arrive with their features |
 
 ## Cross-cutting rules

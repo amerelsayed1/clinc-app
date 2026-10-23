@@ -244,4 +244,6 @@ npm test                            # API tests against a throwaway clinic_test 
 npm run typecheck
 ```
 
+Uploaded documents are stored encrypted under `STORAGE_DIR` (default `.data/objects`). Set `DOCUMENT_ENCRYPTION_KEY` (32 random bytes, base64) in production; a fixed dev key is used otherwise. The storage layer and the malware scanner are interfaces (`apps/api/src/storage.ts`): swap in S3/GCS and a real scanner (e.g. ClamAV) before handling real patient data.
+
 With `OTP_DEV_ECHO=true` (never in production) the sign-in code is shown on screen instead of being sent by SMS. To approve a doctor's licence, make a platform admin once with `npm run make-admin -w @clinic/api -- +20…` and call `POST /admin/doctors/:userId/decision`.

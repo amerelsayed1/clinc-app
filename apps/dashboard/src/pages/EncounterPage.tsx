@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { VITAL_KEYS, VITAL_KINDS, type VitalKind } from '@clinic/shared';
 import { ApiError, api, type EncContent, type Encounter } from '../api';
 import { fmtDateTime } from '../time';
+import { DocumentsSection } from './DocumentsSection';
 import { useSettings } from './AppointmentsPage';
 
 const emptyRx = { medication: '', dose: '', frequency: '', duration: '', notes: '' };
@@ -52,6 +53,8 @@ export function EncounterPage({ can }: { can: (p: string) => boolean }) {
       ) : (
         <Signed e={e} isAuthor={isAuthor} canPublish={can('clinical.write')} tz={tz} onChange={reload} showPrivate={role === 'doctor'} />
       )}
+
+      <div className="no-print"><DocumentsSection patientId={e.patient.id} encounterId={e.id} can={can} /></div>
     </section>
   );
 }

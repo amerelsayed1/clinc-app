@@ -48,8 +48,9 @@ export async function api<T = unknown>(path: string, init: { method?: string; bo
   const t = tokens.get();
   const res = await fetch(`/api${path}`, {
     method: init.method ?? 'GET',
-    headers: { ...(init.body ? { 'content-type': 'application/json' } : {}), ...(t ? { authorization: `Bearer ${t.accessToken}` } : {}) },
-    body: init.body ? JSON.stringify(init.body) : undefined,
+    // FormData sets its own multipart content-type (with boundary); everything else is JSON.
+    headers: { ...(init.body && !(init.body instanceof FormData) ? { 'content-type': 'application/json' } : {}), ...(t ? { authorization: `Bearer ${t.accessToken}` } : {}) },
+    body: init.body ? (init.body instanceof FormData ? init.body : JSON.stringify(init.body)) : undefined,
   });
   if (res.status === 401 && retry && t && (await refresh())) return api<T>(path, init, false);
   if (res.status === 401 && t) tokens.set(null);
@@ -186,4 +187,22 @@ export interface EncounterSummary {
   authorName: string | null;
   chiefComplaint: string;
   diagnosis: string;
+}
+
+export interface Doc {
+  id: string;
+  source: 'clinician' | 'staff' | 'patient';
+  provenance: 'clinician_authored' | 'patient_submitted_unverified';
+  uploaderName: string | null;
+  uploaderRole: string;
+  category: string;
+  title: string;
+  notes: string;
+  documentDate: string | null;
+  encounterId: string | null;
+  totalBytes: number;
+  published: boolean;
+  createdAt: string;
+  pages: { page: number; mime: string; sizeBytes: number }[];
+  reviewed?: boolean;
 }

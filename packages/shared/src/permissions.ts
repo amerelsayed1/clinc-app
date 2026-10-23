@@ -12,6 +12,7 @@ export const PERMISSIONS = [
   'appointments.manage', // create, reschedule, check in, cancel, mark no-show
   'vitals.write',
   'documents.upload',
+  'documents.upload_clinical', // lab results, imaging, prescriptions; front desk uploads administrative documents only
   'clinical.read',
   'clinical.write', // encounters, diagnoses, prescriptions, signing
   'followups.write',
@@ -23,7 +24,7 @@ export type Permission = (typeof PERMISSIONS)[number];
 
 export const ROLE_DEFAULTS: Record<Role, readonly Permission[]> = {
   doctor: PERMISSIONS,
-  nurse: ['patients.read', 'patients.write', 'appointments.read', 'vitals.write', 'documents.upload', 'clinical.read'],
+  nurse: ['patients.read', 'patients.write', 'appointments.read', 'vitals.write', 'documents.upload', 'documents.upload_clinical', 'clinical.read'],
   receptionist: ['patients.read', 'patients.write', 'appointments.read', 'appointments.manage', 'documents.upload'],
 };
 
