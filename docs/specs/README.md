@@ -18,6 +18,19 @@ Priority: **P0** = MVP, **P1** = Phase 2. IDs are `F<spec>-<n>`.
 | 10 | [Notifications](10-notifications.md) | BR-07 | P0 |
 | 11 | [Audit & Security](11-audit-security.md) | BR-08, RULE-008 | P0 |
 
+## Stack and delivery approach
+
+Backend: Node.js (TypeScript, Fastify) + PostgreSQL. Clinic UI: React dashboard. Features are delivered as **vertical slices** (migration + API + dashboard + tests + spec status) one at a time.
+
+## Implementation status
+
+| Spec | Status |
+|------|--------|
+| 01 Identity & Auth | **Done except:** MFA for doctors (F01-3), email, patient claim flow (F01-7, needs spec 03), phone change (F01-8) |
+| 02 Clinic & Staff | **Done** (F02-1…F02-6). Custom roles beyond per-permission denial are P1 |
+| 03–10 | Not started |
+| 11 Audit & Security | Audit log hash chain + append-only trigger done; remaining items arrive with their features |
+
 ## Cross-cutting rules
 
 - Authorization is enforced **server-side** on role **and** care relationship **and** sharing grant. UI hiding is never sufficient.

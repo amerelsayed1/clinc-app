@@ -1,0 +1,12 @@
+{
+  "name": "clinic-app",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev:api": "npm run dev -w @clinic/api",
+    "dev:dashboard": "npm run dev -w @clinic/dashboard",
+    "migrate": "npm run migrate -w @clinic/api",
+    "test": "npm test -w @clinic/api",
+    "typecheck": "npm run typecheck -w @clinic/api && npm run typecheck -w @clinic/dashboard"
+  }
+}

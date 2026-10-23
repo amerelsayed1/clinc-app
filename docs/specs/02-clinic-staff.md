@@ -13,7 +13,7 @@
 | F02-1 | Creating a workspace makes the doctor its owner. Clinic name optional. |
 | F02-2 | Doctor invites staff by phone/email with a role (receptionist or nurse); invitation expires and is single-use. |
 | F02-3 | Roles are default permission bundles; the doctor can switch individual permissions off (granular custom roles = P1). |
-| F02-4 | Doctor can suspend or remove staff; sessions are revoked immediately. |
+| F02-4 | Doctor can suspend or remove staff; their workspace access ends on the very next request (membership and permissions are checked per request). Their own sessions are not killed because the same person may hold other roles. |
 | F02-5 | Staff sees a patient's clinical data only if the patient has an active relationship with this workspace **and** the role permits it (RULE-004). |
 | F02-6 | Data model supports many doctors per workspace and many workspaces per user; MVP UI does not expose this. |
 

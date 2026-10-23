@@ -227,3 +227,21 @@ These are **test prices**, not validated willingness-to-pay or profitability est
 ## Document Status
 
 **Draft for founder review.** The confirmed ownership direction is **Doctor-First / Single-Doctor Practice MVP**. Regulatory conclusions, prices, pilot targets and open consent decisions remain subject to validation. This README is a business/product starting point; detailed PRD, user stories, permission matrix, domain/data models and acceptance criteria should be maintained separately as the project advances.
+
+---
+
+## Development
+
+Stack: Node.js + TypeScript (Fastify) · PostgreSQL · React (Vite). Monorepo: `apps/api`, `apps/dashboard`, `packages/shared`. Feature specs live in [`docs/specs`](docs/specs/README.md).
+
+```bash
+cp .env.example .env            # optional; defaults work for local dev
+docker compose up -d db         # or use any local Postgres matching DATABASE_URL
+npm install
+OTP_DEV_ECHO=true npm run dev:api   # applies migrations on start, API on :3000
+npm run dev:dashboard               # dashboard on :5173 (proxies /api -> :3000)
+npm test                            # API tests against a throwaway clinic_test database
+npm run typecheck
+```
+
+With `OTP_DEV_ECHO=true` (never in production) the sign-in code is shown on screen instead of being sent by SMS. To approve a doctor's licence, make a platform admin once with `npm run make-admin -w @clinic/api -- +20…` and call `POST /admin/doctors/:userId/decision`.
