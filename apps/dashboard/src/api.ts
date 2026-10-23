@@ -92,3 +92,17 @@ export interface AuditEntry {
   metadata: Record<string, unknown>;
   createdAt: string;
 }
+
+export interface Patient {
+  id: string;
+  patientNumber: number;
+  fullName: string;
+  phone: string;
+  dateOfBirth: string | null;
+  sex: 'male' | 'female' | null;
+  status: 'invited' | 'active' | 'ended';
+  hasAccount: boolean;
+  createdAt: string;
+  endedAt: string | null;
+  endedBy: 'workspace' | 'patient' | null;
+}

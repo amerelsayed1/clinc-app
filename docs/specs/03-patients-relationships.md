@@ -26,3 +26,10 @@
 
 ## Audit events
 patient created, relationship invited/accepted/ended, duplicate flagged, merge executed/reverted.
+
+## Implementation notes
+- **Model:** `patients` is a minimal global identity (phone + optional linked account). Demographics live on the per-clinic `care_relationships` row, so two clinics registering the same phone get independent records and cannot see each other's data (RULE-003). Nothing is merged automatically.
+- A patient who already has an account gets a relationship in `invited` state until they accept (F03-3); a patient without an account is `active` immediately and links on `POST /patient/claim` after phone OTP login (F01-7).
+- Duplicate suspicion: same normalized name + date of birth, different phone, within one clinic -> `409 possible_duplicate`; resend with `confirmNotDuplicate: true` to proceed. Name matching is exact after case/space normalization, so spelling variants (including Arabic) are not caught yet.
+- Registering a phone reveals to the registering clinic whether the patient has an account (`invited` vs `active`). Accepted for MVP; revisit with rate limits.
+- Ending a relationship needs the `relationships.manage` permission (doctor only by default). The registration record is kept (retention); the clinic loses edit access and the patient leaves default search.

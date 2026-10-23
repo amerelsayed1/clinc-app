@@ -33,3 +33,13 @@ th, td { text-align: left; padding: .6rem .75rem; border-bottom: 1px solid #eef1
 .banner { background: #fff6dd; border-bottom: 1px solid #f0dc9b; padding: .6rem 1.5rem; }
 .banner.error { background: #fde8e6; border-color: #f2b8b5; }
 code { background: #eef1f5; padding: .1rem .35rem; border-radius: 3px; }
+.row { display: flex; gap: .75rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+.row h2 { margin: 0; }
+.grow { flex: 1; min-width: 240px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 1rem; margin-bottom: 1rem; }
+.pill { font-size: .75rem; padding: .15rem .55rem; border-radius: 99px; background: #e4eefc; color: #0b5cd5; }
+.pill.invited { background: #fff6dd; color: #8a6100; }
+.pill.ended { background: #eef1f5; color: #6b7a8c; }
+dl { display: grid; grid-template-columns: 140px 1fr; gap: .5rem 1rem; background: #fff; padding: 1rem; border: 1px solid #dde3ea; border-radius: 8px; }
+dt { color: #6b7a8c; } dd { margin: 0; }
+td a { color: #0b5cd5; text-decoration: none; }

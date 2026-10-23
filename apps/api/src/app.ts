@@ -9,6 +9,7 @@ import { AppError } from './errors.js';
 import { adminRoutes } from './routes/admin.js';
 import { authRoutes } from './routes/auth.js';
 import { meRoutes } from './routes/me.js';
+import { patientRoutes } from './routes/patients.js';
 import { workspaceRoutes } from './routes/workspaces.js';
 
 export async function buildApp(pool: pg.Pool, opts: { sms?: SmsSender; logger?: boolean } = {}) {
@@ -31,5 +32,6 @@ export async function buildApp(pool: pg.Pool, opts: { sms?: SmsSender; logger?: 
   meRoutes(app, pool);
   adminRoutes(app, pool);
   workspaceRoutes(app, pool, sms);
+  patientRoutes(app, pool);
   return app;
 }

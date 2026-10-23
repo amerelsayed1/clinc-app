@@ -116,3 +116,8 @@ export function requireWorkspace(pool: pg.Pool, ...needed: Permission[]) {
 }
 
 export type Guard = (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+
+/** preHandler pair for routes that need a live session and workspace permissions. */
+export function workspaceGuard(pool: pg.Pool, ...needed: Permission[]) {
+  return { preHandler: [authenticate(pool), requireWorkspace(pool, ...needed)] };
+}

@@ -12,7 +12,7 @@ export async function setupApp() {
 }
 
 export async function reset(pool: pg.Pool) {
-  await pool.query('truncate audit_log, invitations, memberships, workspaces, doctor_profiles, sessions, otp_codes, users restart identity cascade');
+  await pool.query('truncate audit_log, care_relationships, patients, invitations, memberships, workspaces, doctor_profiles, sessions, otp_codes, users restart identity cascade');
 }
 
 export interface Session {

@@ -5,6 +5,7 @@ import { api, tokens, type Me } from './api';
 import { AuditPage } from './pages/AuditPage';
 import { LoginPage } from './pages/LoginPage';
 import { OnboardingPage } from './pages/OnboardingPage';
+import { PatientDetailPage, PatientsPage } from './pages/PatientsPage';
 import { TeamPage } from './pages/TeamPage';
 
 function useAuthed() {
@@ -42,6 +43,7 @@ export function App() {
       <header>
         <strong>{membership.workspaceName ?? 'My Clinic'}</strong>
         <nav>
+          {can('patients.read') && <NavLink to="/patients">Patients</NavLink>}
           {can('staff.manage') && <NavLink to="/team">Team</NavLink>}
           {can('audit.read') && <NavLink to="/audit">Audit log</NavLink>}
         </nav>
@@ -57,6 +59,8 @@ export function App() {
       {user.doctorProfile?.verificationStatus === 'rejected' && <div className="banner error">Your licence verification was rejected: {user.doctorProfile.verificationNote ?? 'contact support'}.</div>}
       <main>
         <Routes>
+          <Route path="/patients" element={can('patients.read') ? <PatientsPage can={can} /> : <Navigate to="/" />} />
+          <Route path="/patients/:id" element={can('patients.read') ? <PatientDetailPage can={can} /> : <Navigate to="/" />} />
           <Route path="/team" element={can('staff.manage') ? <TeamPage /> : <Navigate to="/" />} />
           <Route path="/audit" element={can('audit.read') ? <AuditPage /> : <Navigate to="/" />} />
           <Route

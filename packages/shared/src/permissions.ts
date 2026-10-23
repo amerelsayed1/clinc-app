@@ -14,6 +14,7 @@ export const PERMISSIONS = [
   'clinical.read',
   'clinical.write', // encounters, diagnoses, prescriptions, signing
   'followups.write',
+  'relationships.manage', // end a patient relationship
   'staff.manage',
   'audit.read',
 ] as const;
