@@ -232,14 +232,14 @@ These are **test prices**, not validated willingness-to-pay or profitability est
 
 ## Development
 
-Stack: Node.js + TypeScript (Fastify) · PostgreSQL · React (Vite). Monorepo: `apps/api`, `apps/dashboard` (clinic web), `apps/patient` and `apps/admin` (Flutter), `packages/shared`, `packages/clinic_core` (shared Dart package). See `docs/runbook.md` for operations. Feature specs live in [`docs/specs`](docs/specs/README.md).
+Stack: Node.js + TypeScript (Fastify) · PostgreSQL · Flutter. Monorepo: `apps/api`, `apps/clinic` (doctor/staff), `apps/patient` and `apps/admin` (Flutter mobile apps), `packages/shared`, `packages/clinic_core` (shared Dart package). See `docs/runbook.md` for operations. Feature specs live in [`docs/specs`](docs/specs/README.md).
 
 ```bash
 cp .env.example .env            # optional; defaults work for local dev
 docker compose up -d db         # or use any local Postgres matching DATABASE_URL
 npm install
 OTP_DEV_ECHO=true npm run dev:api   # applies migrations on start, API on :3000
-npm run dev:dashboard               # dashboard on :5173 (proxies /api -> :3000)
+(cd apps/clinic && flutter run --dart-define=API_BASE_URL=http://localhost:3000)   # clinic app; same for apps/patient, apps/admin
 npm test                            # API tests against a throwaway clinic_test database
 npm run typecheck
 ```
