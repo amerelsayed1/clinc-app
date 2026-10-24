@@ -49,12 +49,25 @@ const unseal = (key: Buffer, blob: Buffer) => {
   return Buffer.concat([d.update(blob.subarray(28)), d.final()]);
 };
 
-export function encryptFile(plain: Buffer, masterKey = config.documentKey) {
-  const dataKey = randomBytes(32);
-  return { blob: seal(dataKey, plain), wrappedKey: seal(masterKey, dataKey).toString('base64') };
+/** Wraps `dataKey` with the current master key; the result is `<keyId>.<base64>` so retired keys can still unwrap old files. */
+export function wrapKey(dataKey: Buffer, keyId = config.documentKeyId, masterKey = config.documentKeyring.get(keyId) ?? config.documentKey): string {
+  return `${keyId}.${seal(masterKey, dataKey).toString('base64')}`;
 }
-export function decryptFile(blob: Buffer, wrappedKey: string, masterKey = config.documentKey) {
-  return unseal(unseal(masterKey, Buffer.from(wrappedKey, 'base64')), blob);
+export function unwrapKey(wrapped: string): Buffer {
+  const dot = wrapped.indexOf('.');
+  const keyId = dot > 0 ? wrapped.slice(0, dot) : 'v1';
+  const key = config.documentKeyring.get(keyId) ?? (keyId === 'v1' ? config.documentKey : undefined);
+  if (!key) throw new Error(`Unknown encryption key id "${keyId}"`);
+  return unseal(key, Buffer.from(dot > 0 ? wrapped.slice(dot + 1) : wrapped, 'base64'));
+}
+export const keyIdOf = (wrapped: string) => (wrapped.includes('.') ? wrapped.slice(0, wrapped.indexOf('.')) : 'v1');
+
+export function encryptFile(plain: Buffer) {
+  const dataKey = randomBytes(32);
+  return { blob: seal(dataKey, plain), wrappedKey: wrapKey(dataKey) };
+}
+export function decryptFile(blob: Buffer, wrappedKey: string) {
+  return unseal(unwrapKey(wrappedKey), blob);
 }
 
 // ---------- content sniffing: trust the bytes, not the client's content-type ----------
@@ -91,6 +104,7 @@ export interface LinkClaims {
   p: number; // page
   u: string; // user the link was issued to
   w: string | null; // workspace the viewer acts for (null = patient viewing their own record)
+  g?: string; // sharing grant the viewer relies on (spec 08); re-checked when the file is served
   e: number; // expiry, unix seconds
 }
 const linkKey = () => createHmac('sha256', config.jwtSecret).update('file-link-v1').digest();

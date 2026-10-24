@@ -31,3 +31,8 @@ login, failed login, MFA enrolment, session revoke, credential verification deci
 
 ## Open questions
 National-ID verification for patients; doctor license verification source (syndicate registry vs manual review).
+
+## Implementation notes
+- MFA is TOTP (RFC 6238) with 8 one-time recovery codes. Doctors and platform admins must enrol; clinical permissions require *verified licence + MFA*, enforced server-side in `effectivePermissions` inputs. Login for an enrolled account returns `{mfaRequired, mfaToken}` and a session only exists after `/auth/mfa/verify` (5 attempts, 5 min, replay-protected).
+- Phone change: OTP to the old and new numbers, other sessions revoked (`/auth/phone-change/*`).
+- Surfaces: dashboard (login + MFA step, mandatory MFA gate for doctors, Security page), patient app and admin app (shared `packages/clinic_core`).

@@ -233,7 +233,7 @@ describe('isolation between clinics (RULE-003)', () => {
     const { d, pat } = await setup();
     const doc = (await upload(d, `/patients/${pat.id}/documents`, { category: 'imaging' }, [{ name: 'a.jpg', buf: jpeg() }])).json();
     const other = await makeVerifiedDoctor(ctx.app, ctx.pool, '+201000000009');
-    expect(await docsOf(other, pat.id)).toEqual([]);
+    expect((await get(other, `/patients/${pat.id}/documents`)).statusCode).toBe(404);
     expect((await get(other, `/documents/${doc.id}`)).statusCode).toBe(404);
     expect((await get(other, `/documents/${doc.id}/pages/1/link`)).statusCode).toBe(404);
     expect((await post(other, `/documents/${doc.id}/publish`)).statusCode).toBe(404);

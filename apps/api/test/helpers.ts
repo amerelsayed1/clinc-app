@@ -12,7 +12,7 @@ export async function setupApp() {
 }
 
 export async function reset(pool: pg.Pool) {
-  await pool.query('truncate audit_log, document_access, document_reviews, document_shares, document_pages, documents, observations, encounter_versions, encounters, appointments, care_relationships, patients, invitations, memberships, workspaces, doctor_profiles, sessions, otp_codes, users restart identity cascade');
+  await pool.query('truncate audit_log, audit_verifications, break_glass_access, correction_requests, data_exports, followup_submissions, followup_plan_versions, followup_measurements, followup_plans, shared_access_log, access_requests, sharing_grants, mfa_recovery_codes, mfa_challenges, document_access, document_reviews, document_shares, document_pages, documents, observations, encounter_versions, encounters, appointments, care_relationships, patients, invitations, memberships, workspaces, doctor_profiles, sessions, otp_codes, users restart identity cascade');
 }
 
 export interface Session {
@@ -33,7 +33,15 @@ export async function login(app: FastifyInstance, phone: string): Promise<Sessio
 export async function makeVerifiedDoctor(app: FastifyInstance, pool: pg.Pool, phone: string, verify = true) {
   const s = await login(app, phone);
   await app.inject({ method: 'POST', url: '/doctors/register', headers: s.headers, payload: { fullName: 'Dr Test', licenseNumber: 'LIC-123' } });
-  if (verify) await pool.query(`update doctor_profiles set verification_status = 'verified' where user_id = $1`, [s.user.id]);
+  if (verify) {
+    await pool.query(`update doctor_profiles set verification_status = 'verified' where user_id = $1`, [s.user.id]);
+    await enableMfa(pool, s.user.id);
+  }
   const ws = await app.inject({ method: 'POST', url: '/workspaces', headers: s.headers, payload: { name: 'Test Clinic' } });
   return { ...s, workspaceId: ws.json().id as string };
+}
+
+/** Marks MFA as enrolled without going through the API (the flow itself is covered in auth.test.ts). */
+export async function enableMfa(pool: pg.Pool, userId: string) {
+  await pool.query(`update users set mfa_enabled_at = now(), totp_secret_enc = 'x' where id = $1`, [userId]);
 }

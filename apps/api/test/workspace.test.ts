@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { verifyChain } from '../src/audit.js';
-import { login, makeVerifiedDoctor, reset, setupApp } from './helpers.js';
+import { enableMfa, login, makeVerifiedDoctor, reset, setupApp } from './helpers.js';
 
 let ctx: Awaited<ReturnType<typeof setupApp>>;
 beforeAll(async () => void (ctx = await setupApp()));
@@ -52,6 +52,10 @@ describe('doctor onboarding', () => {
     expect(pending).toHaveLength(1);
     const dec = await ctx.app.inject({ method: 'POST', url: `/admin/doctors/${d.user.id}/decision`, headers: admin.headers, payload: { decision: 'verified' } });
     expect(dec.statusCode).toBe(200);
+    // Verified licence alone is not enough: clinical actions also need MFA (F01-3).
+    const before = (await ctx.app.inject({ method: 'GET', url: '/workspace', headers: d.headers })).json();
+    expect(before.myPermissions).not.toContain('clinical.write');
+    await enableMfa(ctx.pool, d.user.id);
     const ws = (await ctx.app.inject({ method: 'GET', url: '/workspace', headers: d.headers })).json();
     expect(ws.myPermissions).toContain('clinical.write');
   });

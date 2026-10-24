@@ -8,6 +8,7 @@
     "start": "tsx src/server.ts",
     "migrate": "tsx src/migrate.ts",
     "make-admin": "tsx scripts/make-admin.ts",
+    "rotate-keys": "tsx scripts/rotate-keys.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json"
   },

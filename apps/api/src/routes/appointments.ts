@@ -7,6 +7,7 @@ import { workspaceGuard } from '../auth.js';
 import { tx } from '../db.js';
 import { createDraftEncounter } from '../encounter-store.js';
 import { AppError, badRequest, conflict, notFound } from '../errors.js';
+import { relationshipRecipient } from '../notifications.js';
 import { loadSettings, withinWorkingHours } from './settings.js';
 
 const SELECT = `
@@ -196,6 +197,7 @@ export function appointmentRoutes(app: FastifyInstance, pool: pg.Pool) {
       .refine((b) => b.scheduledAt || b.localStart || b.durationMinutes || b.type || b.reason !== undefined, 'Nothing to update')
       .parse(req.body);
     const ws = req.workspace!;
+    let moved: { relationshipId: string; start: Date } | null = null;
     await tx(pool, async (c) => {
       await lock(c, ws.workspaceId);
       const cur = (await c.query('select * from appointments where id = $1 and workspace_id = $2 for update', [id, ws.workspaceId])).rows[0];
@@ -206,12 +208,19 @@ export function appointmentRoutes(app: FastifyInstance, pool: pg.Pool) {
       const start = body.scheduledAt || body.localStart ? await resolveStart(c, settings.timezone, body) : cur.scheduled_at;
       const minutes = body.durationMinutes ?? cur.duration_minutes;
       if (timeChanged) await checkSlot(c, ws.workspaceId, start, minutes, body.override, id);
+      if (new Date(start).getTime() !== cur.scheduled_at.getTime()) moved = { relationshipId: cur.care_relationship_id, start: new Date(start) };
       await c.query(
         `update appointments set scheduled_at = $2, duration_minutes = $3, type = $4, reason = $5, updated_at = now() where id = $1`,
         [id, start, minutes, body.type ?? cur.type, body.reason === undefined ? cur.reason : body.reason || null],
       );
       await writeAudit(c, { workspaceId: ws.workspaceId, actorId: req.auth!.userId, actorRole: ws.role, action: timeChanged ? 'appointment.rescheduled' : 'appointment.updated', targetType: 'appointment', targetId: id, metadata: { overridden: !!body.override }, ip: req.ip });
     });
+    // F04-7: tell the patient (generic push/SMS; details stay in the inbox). Never blocks or fails the edit.
+    if (moved) {
+      const m: { relationshipId: string; start: Date } = moved;
+      const to = await relationshipRecipient(pool, m.relationshipId);
+      if (to) await app.notifier.notify({ userId: to.userId, type: 'appointment_rescheduled', key: `appt-rescheduled:${id}:${m.start.getTime()}`, params: { clinicName: to.clinicName, appointmentId: id, appointmentAt: m.start.toISOString() } });
+    }
     return present((await pool.query(`${SELECT} where a.id = $1`, [id])).rows[0]);
   });
 
@@ -251,6 +260,11 @@ export function appointmentRoutes(app: FastifyInstance, pool: pg.Pool) {
         }
         await writeAudit(c, { workspaceId: ws.workspaceId, actorId: req.auth!.userId, actorRole: ws.role, action: `appointment.${t.to}`, targetType: 'appointment', targetId: id, metadata: { from: cur.status }, ip: req.ip });
       });
+      if (t.path === 'cancel') {
+        const a = (await pool.query('select care_relationship_id, scheduled_at from appointments where id = $1', [id])).rows[0];
+        const to = await relationshipRecipient(pool, a.care_relationship_id);
+        if (to) await app.notifier.notify({ userId: to.userId, type: 'appointment_cancelled', key: `appt-cancelled:${id}`, params: { clinicName: to.clinicName, appointmentId: id, appointmentAt: new Date(a.scheduled_at).toISOString() } });
+      }
       return present((await pool.query(`${SELECT} where a.id = $1`, [id])).rows[0]);
     });
   }

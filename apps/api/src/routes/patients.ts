@@ -99,6 +99,7 @@ export function patientRoutes(app: FastifyInstance, pool: pg.Pool) {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const r = (await pool.query(`${SELECT} where r.id = $1 and r.workspace_id = $2`, [id, req.workspace!.workspaceId])).rows[0] as Row | undefined;
     if (!r) throw notFound('Patient not found');
+    await tx(pool, (c) => writeAudit(c, { workspaceId: req.workspace!.workspaceId, actorId: req.auth!.userId, actorRole: req.workspace!.role, action: 'patient.viewed', targetType: 'patient', targetId: id, ip: req.ip }));
     return present(r);
   });
 

@@ -66,6 +66,8 @@ export interface Me {
   phone: string;
   fullName: string | null;
   isPlatformAdmin: boolean;
+  mfaEnabled: boolean;
+  mfaRequired: boolean;
   doctorProfile: { licenseNumber: string; verificationStatus: 'pending' | 'verified' | 'rejected'; verificationNote: string | null } | null;
   memberships: { id: string; workspaceId: string; workspaceName: string | null; role: 'doctor' | 'nurse' | 'receptionist'; permissions: string[] }[];
 }
@@ -88,10 +90,33 @@ export interface Invitation {
 export interface AuditEntry {
   seq: number;
   action: string;
+  actorId?: string | null;
   actorName: string | null;
   actorRole: string | null;
+  targetType?: string | null;
+  targetId?: string | null;
+  result?: 'success' | 'denied';
+  ip?: string | null;
+  device?: string | null;
+  breakGlass?: boolean;
   metadata: Record<string, unknown>;
   createdAt: string;
+}
+export interface DataRequest {
+  id: string;
+  status: 'open' | 'resolved' | 'rejected';
+  targetType: 'encounter' | 'document' | 'relationship';
+  targetId: string;
+  targetLabel: string | null;
+  description: string;
+  patient: { id: string; fullName: string; patientNumber: number };
+  resolutionNote: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+export interface Retention {
+  policy: { clinicalRecordYears: number; auditLogYears: number; legalHoldBlocksDeletion: boolean };
+  legalHolds: { patientId: string; fullName: string; patientNumber: number; reason: string; setAt: string }[];
 }
 
 export interface Patient {
@@ -205,4 +230,176 @@ export interface Doc {
   createdAt: string;
   pages: { page: number; mime: string; sizeBytes: number }[];
   reviewed?: boolean;
+}
+
+// --- Sharing & consent (spec 08) ---
+export interface ShareScope {
+  items?: { type: 'document' | 'encounter'; id: string }[];
+  categories?: string[];
+  from?: string;
+  to?: string;
+}
+export interface AccessRequestRow {
+  id: string;
+  status: 'pending' | 'approved' | 'denied' | 'cancelled' | 'expired';
+  scope: ShareScope;
+  purpose: string;
+  requestedDays: number;
+  sensitive: boolean;
+  createdAt: string;
+  expiresAt: string;
+  decidedAt: string | null;
+  grantId: string | null;
+  clinicName: string;
+  doctorName: string;
+}
+export interface SharedGrant {
+  id: string;
+  scope: ShareScope;
+  purpose: string;
+  createdAt: string;
+  expiresAt: string;
+  patientName: string;
+  relationshipId: string | null;
+}
+export type Provenance = 'clinician_authored' | 'patient_submitted_unverified';
+export interface SharedItem {
+  type: 'document' | 'encounter';
+  id: string;
+  category: string;
+  date: string;
+  title: string;
+  source: string;
+  clinicName: string | null;
+  sharedBy: 'patient';
+  provenance: Provenance;
+}
+export interface SharedEncounter {
+  id: string;
+  provenance: 'clinician_authored';
+  encounterDate: string;
+  clinicName: string;
+  doctorName: string;
+  version: number;
+  chiefComplaint: string;
+  diagnosis: string;
+  plan: string;
+  prescriptions: Rx[];
+  vitals: { kind: string; value: number; measuredAt: string }[];
+}
+export interface SharedDocument {
+  id: string;
+  provenance: Provenance;
+  category: string;
+  title: string;
+  notes: string;
+  documentDate: string | null;
+  createdAt: string;
+  pages: { page: number; mime: string }[];
+}
+
+// ---- Follow-up plans (spec 09). Submissions are always patient-reported and never verified. ----
+export interface FollowupMeasurement {
+  id: string;
+  kind: string | null;
+  name: string;
+  unit: string;
+  frequency: 'daily' | 'weekly' | 'custom';
+  intervalDays: number;
+  active: boolean;
+  normalMin: number | null;
+  normalMax: number | null;
+  lastSubmittedAt?: string | null;
+  dueAt?: string | null;
+  overdue?: boolean;
+}
+export interface FollowupSubmission {
+  id: string;
+  measurementId: string;
+  measurementName: string;
+  unit: string;
+  value: number;
+  measuredAt: string;
+  note: string;
+  documentId: string | null;
+  source: 'patient';
+  verified: false;
+  outsideExpectedRange: boolean;
+  flagLabel: string | null;
+}
+export interface FollowupPlan {
+  id: string;
+  careRelationshipId: string;
+  status: 'active' | 'closed';
+  currentVersion: number;
+  nextVisitDate: string | null;
+  instructions: string;
+  startDate: string;
+  endDate: string | null;
+  closedAt: string | null;
+  closeReason: string | null;
+  measurements: FollowupMeasurement[];
+  submissions?: FollowupSubmission[];
+}
+export interface FollowupVersion {
+  version: number;
+  change: 'created' | 'edited' | 'closed';
+  editedBy: string;
+  at: string;
+  snapshot: { plan: Partial<FollowupPlan>; measurements: FollowupMeasurement[] };
+}
+export interface FollowupTrend {
+  measurement: FollowupMeasurement;
+  points: { id: string; measuredAt: string; value: number; outsideExpectedRange: boolean }[];
+}
+export interface AttentionEntry {
+  careRelationshipId: string;
+  patientName: string;
+  items: { planId: string; measurementId: string; measurementName: string; dueAt: string; daysOverdue: number; lastSubmittedAt: string | null }[];
+}
+
+export interface TimelineEntry {
+  type: 'encounter' | 'prescription' | 'document' | 'observation' | 'followup' | 'appointment' | 'shared_notice';
+  id: string;
+  refType: string;
+  date: string;
+  title: string;
+  summary: string;
+  author: { id: string; name: string } | null;
+  source: { kind: 'clinic' | 'patient'; workspaceId: string | null; name: string | null };
+  version: number;
+  versionCount: number;
+  amended: boolean;
+  historyPath: string | null;
+  verificationBadge: 'clinician_authored' | 'patient_submitted' | 'reviewed';
+  shared?: { sharedBy: 'patient'; via: 'grant' | 'send'; grantId: string | null; expiresAt: string | null; originClinic: string | null; label: string };
+  details: Record<string, unknown>;
+}
+export interface TimelinePage {
+  items: TimelineEntry[];
+  nextCursor: string | null;
+}
+
+// ---- Spec 10: notifications ----
+export interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  data: Record<string, string>;
+  createdAt: string;
+  read: boolean;
+}
+export interface NotificationPage {
+  items: NotificationItem[];
+  nextCursor: string | null;
+}
+export interface NotificationPreferences {
+  locale: 'ar' | 'en';
+  channels: ('push' | 'sms')[];
+  quietHours: { start: string; end: string; timezone: string } | null;
+  timezone: string;
+  disabledTypes: string[];
+  types: { type: string; mandatory: boolean }[];
+  consent: { required: boolean; push: boolean | null; sms: boolean | null };
 }
