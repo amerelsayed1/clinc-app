@@ -1,0 +1,25 @@
+name: carelink_clinic
+description: "CareLink clinic app (doctors, nurses, receptionists; mobile-first)"
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  timezone: ^0.11.0
+  clinic_core:
+    path: ../../packages/clinic_core
+  share_plus: ^12.0.2
+  image_picker: ^1.2.4
+  url_launcher: ^6.3.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

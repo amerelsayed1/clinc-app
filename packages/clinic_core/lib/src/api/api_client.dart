@@ -25,6 +25,10 @@ class ApiClient {
   final http.Client _http;
   final TokenStore _store;
 
+  /// Headers added to every request (e.g. `x-workspace-id` for staff apps). Mutable so the app can
+  /// set it once the active workspace is known.
+  final Map<String, String> extraHeaders = {};
+
   /// Called when the refresh token was rejected and the local session was discarded.
   void Function()? onSessionExpired;
 
@@ -68,13 +72,18 @@ class ApiClient {
   }
 
   /// Uploads one file as multipart/form-data (e.g. a patient document). Same auth/refresh behaviour as [request].
-  Future<dynamic> postMultipart(String path, {Map<String, String> fields = const {}, required List<int> bytes, required String filename, String fileField = 'file'}) async {
+  Future<dynamic> postMultipart(String path, {Map<String, String> fields = const {}, required List<int> bytes, required String filename, String fileField = 'file'}) =>
+      postMultipartFiles(path, fields: fields, files: [(filename: filename, bytes: bytes)], fileField: fileField);
+
+  /// Like [postMultipart] but with several files under the same field (e.g. the pages of one document).
+  Future<dynamic> postMultipartFiles(String path, {Map<String, String> fields = const {}, required List<({String filename, List<int> bytes})> files, String fileField = 'file'}) async {
     Future<http.Response> send(String? token) async {
       final req = http.MultipartRequest('POST', Uri.parse('$baseUrl$path'))
+        ..headers.addAll(extraHeaders)
         ..headers['accept'] = 'application/json'
         ..headers.addAll({if (token != null) 'authorization': 'Bearer $token'})
         ..fields.addAll(fields)
-        ..files.add(http.MultipartFile.fromBytes(fileField, bytes, filename: filename));
+        ..files.addAll([for (final f in files) http.MultipartFile.fromBytes(fileField, f.bytes, filename: f.filename)]);
       try {
         return await http.Response.fromStream(await _http.send(req).timeout(timeout));
       } on TimeoutException {
@@ -90,6 +99,19 @@ class ApiClient {
       res = await send(_tokens!.access);
     }
     return _decode(res);
+  }
+
+  /// Fetches raw bytes (e.g. a document page behind a short-lived signed `/files/...` link).
+  Future<List<int>> getBytes(String path) async {
+    try {
+      final res = await _http.get(Uri.parse('$baseUrl$path'), headers: {...extraHeaders}).timeout(timeout);
+      if (res.statusCode >= 200 && res.statusCode < 300) return res.bodyBytes;
+      throw _error(res);
+    } on TimeoutException {
+      throw ApiException.network('timeout');
+    } on http.ClientException catch (e) {
+      throw ApiException.network(e.message);
+    }
   }
 
   /// True when a usable session exists afterwards (refreshed by us or by a concurrent call).
@@ -124,6 +146,7 @@ class ApiClient {
     var uri = Uri.parse('$baseUrl$path');
     if (query != null && query.isNotEmpty) uri = uri.replace(queryParameters: query);
     final req = http.Request(method, uri)
+      ..headers.addAll(extraHeaders)
       ..headers['accept'] = 'application/json'
       ..headers.addAll({if (token != null) 'authorization': 'Bearer $token'});
     if (body != null) {
