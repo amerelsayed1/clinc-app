@@ -232,7 +232,7 @@ These are **test prices**, not validated willingness-to-pay or profitability est
 
 ## Development
 
-Stack: Node.js + TypeScript (Fastify) · PostgreSQL · React (Vite). Monorepo: `apps/api`, `apps/dashboard`, `packages/shared`. Feature specs live in [`docs/specs`](docs/specs/README.md).
+Stack: Node.js + TypeScript (Fastify) · PostgreSQL · React (Vite). Monorepo: `apps/api`, `apps/dashboard` (clinic web), `apps/patient` and `apps/admin` (Flutter), `packages/shared`, `packages/clinic_core` (shared Dart package). See `docs/runbook.md` for operations. Feature specs live in [`docs/specs`](docs/specs/README.md).
 
 ```bash
 cp .env.example .env            # optional; defaults work for local dev

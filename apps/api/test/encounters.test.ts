@@ -176,7 +176,7 @@ describe('vitals (F05-3)', () => {
     expect(t.unit).toBe('kg');
     expect(t.points.map((p: { value: number }) => p.value)).toEqual([72, 69]);
     const other = await makeVerifiedDoctor(ctx.app, ctx.pool, '+201000000009');
-    expect((await get(other, `/patients/${pat.id}/observations?kind=weight_kg`)).json().points).toHaveLength(0);
+    expect((await get(other, `/patients/${pat.id}/observations?kind=weight_kg`)).statusCode).toBe(404);
   });
 });
 

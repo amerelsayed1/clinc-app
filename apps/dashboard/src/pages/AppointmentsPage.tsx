@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, api, type Appointment, type Patient, type Settings } from '../api';
 import { fmtTime, todayIn } from '../time';
+import { AttentionWidget } from './FollowupSection';
 
 const LABEL: Record<Appointment['status'], string> = {
   scheduled: 'Scheduled',
@@ -90,6 +91,7 @@ export function AppointmentsPage({ can }: { can: (p: string) => boolean }) {
         <span className="spacer" />
         {can('appointments.manage') && <button onClick={() => setAdding((a) => !a)}>{adding ? 'Close' : 'New appointment'}</button>}
       </div>
+      {can('clinical.read') && <AttentionWidget />}
       {adding && <BookingForm tz={tz} day={day} onDone={() => (setAdding(false), reload())} />}
       {act.error && <p className="error">{(act.error as Error).message}</p>}
       <h3>Waiting ({waiting.length})</h3>

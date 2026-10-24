@@ -7,6 +7,8 @@ import { authenticate, workspaceGuard } from '../auth.js';
 import { config } from '../config.js';
 import { tx } from '../db.js';
 import { AppError, badRequest, conflict, forbidden, notFound } from '../errors.js';
+import { relationshipRecipient } from '../notifications.js';
+import { candidates, matches } from './sharing.js';
 import { decryptFile, encryptFile, sha256Hex, signLink, sniffMime, verifyLink, type ObjectStore, type Scanner } from '../storage.js';
 
 const CLINIC_CATEGORIES = ['prescription', 'lab_result', 'imaging', 'report', 'administrative', 'other'] as const;
@@ -183,6 +185,7 @@ export function documentRoutes(app: FastifyInstance, pool: pg.Pool, store: Objec
     const { id } = idParam.parse(req.params);
     const { encounterId } = z.object({ encounterId: z.string().uuid().optional() }).parse(req.query);
     const ws = req.workspace!;
+    if (!(await pool.query('select 1 from care_relationships where id = $1 and workspace_id = $2', [id, ws.workspaceId])).rowCount) throw notFound('Patient not found');
     const rows = (
       await pool.query(
         `${DOC_SELECT}
@@ -197,6 +200,7 @@ export function documentRoutes(app: FastifyInstance, pool: pg.Pool, store: Objec
       )
     ).rows;
     const reviewed = new Set((await pool.query('select document_id from document_reviews where workspace_id = $1', [ws.workspaceId])).rows.map((r) => r.document_id));
+    await tx(pool, (c) => writeAudit(c, { ...ctxAudit(req), action: 'patient.documents_listed', targetType: 'patient', targetId: id, metadata: { count: rows.length } }));
     return rows.map((r) => present(r, { reviewed: reviewed.has(r.id) }));
   });
 
@@ -216,6 +220,7 @@ export function documentRoutes(app: FastifyInstance, pool: pg.Pool, store: Objec
     const p = await pool.query('select 1 from document_pages where document_id = $1 and page = $2', [id, page]);
     if (!p.rowCount) throw notFound('Page not found');
     const { token, expiresAt } = signLink({ d: id, p: page, u: req.auth!.userId, w: ws.workspaceId });
+    await tx(pool, (c) => writeAudit(c, { ...ctxAudit(req), action: 'document.link_issued', targetType: 'document', targetId: id, metadata: { page } }));
     return { path: `/files/${token}`, expiresAt };
   });
 
@@ -247,6 +252,12 @@ export function documentRoutes(app: FastifyInstance, pool: pg.Pool, store: Objec
         else await c.query('update documents set published_at = null, published_by = null where id = $1', [id]);
         await writeAudit(c, { ...ctxAudit(req), action: publish ? 'document.published' : 'document.unpublished', targetType: 'document', targetId: id });
       });
+      if (publish) {
+        // Generic push/SMS; the inbox item says only that a document is available (no title, no category).
+        const d = (await pool.query('select care_relationship_id from documents where id = $1', [id])).rows[0];
+        const to = d?.care_relationship_id ? await relationshipRecipient(pool, d.care_relationship_id) : null;
+        if (to) await app.notifier.notify({ userId: to.userId, type: 'document_published', key: `doc-published:${id}`, params: { clinicName: to.clinicName, documentId: id } });
+      }
       return { ok: true };
     });
   }
@@ -257,8 +268,12 @@ export function documentRoutes(app: FastifyInstance, pool: pg.Pool, store: Objec
     const { reason } = z.object({ reason: z.string().trim().min(3).max(300) }).parse(req.body);
     const ws = req.workspace!;
     await tx(pool, async (c) => {
-      const d = (await c.query(`select uploaded_by from documents where id = $1 and workspace_id = $2 and status = 'available' for update`, [id, ws.workspaceId])).rows[0];
+      const d = (await c.query(`select uploaded_by, care_relationship_id from documents where id = $1 and workspace_id = $2 and status = 'available' for update`, [id, ws.workspaceId])).rows[0];
       if (!d) throw notFound('Document not found');
+      // F11-7: a legal hold on the patient's record overrides deletion.
+      if (d.care_relationship_id && (await c.query('select 1 from care_relationships where id = $1 and legal_hold', [d.care_relationship_id])).rowCount) {
+        throw conflict('legal_hold', 'This patient record is under a legal retention hold and cannot be deleted');
+      }
       if (d.uploaded_by !== req.auth!.userId && ws.role !== 'doctor') throw forbidden('Only the uploader or the doctor can delete this document');
       await c.query(`update documents set status = 'deleted', deleted_at = now(), deleted_by = $2, delete_reason = $3, published_at = null where id = $1`, [id, req.auth!.userId, reason]);
       await writeAudit(c, { ...ctxAudit(req), action: 'document.deleted', targetType: 'document', targetId: id });
@@ -408,11 +423,23 @@ export function documentRoutes(app: FastifyInstance, pool: pg.Pool, store: Objec
     if (!row) throw notFound('File not found');
 
     let allowed = false;
+    let grantId: string | null = null;
     if (claims.w) {
       // Acting for a clinic: its own upload, or a patient document currently sent to it; membership must still be active.
       const m = (await pool.query(`select 1 from memberships where user_id = $1 and workspace_id = $2 and status = 'active'`, [claims.u, claims.w])).rows[0];
+      const viaGrant = claims.g
+        ? (
+            await pool.query(`select g.id, g.scope, g.patient_id from sharing_grants g where g.id = $1 and g.recipient_workspace_id = $2 and g.revoked_at is null and g.expires_at > now()`, [claims.g, claims.w])
+          ).rows[0]
+        : null;
+      if (claims.g) {
+        // Shared access is re-evaluated against the live grant and scope on every request (F08-9).
+        const item = viaGrant && (await candidates(pool, viaGrant.patient_id)).find((i) => i.type === 'document' && i.id === claims.d);
+        grantId = item && matches(viaGrant.scope, item) ? viaGrant.id : null;
+      }
       const visible =
-        row.workspace_id === claims.w ||
+        (claims.g ? grantId !== null : false) ||
+        (!claims.g && row.workspace_id === claims.w) ||
         (await pool.query(
           `select 1 from document_shares s join care_relationships r on r.id = s.care_relationship_id
             where s.document_id = $1 and s.revoked_at is null and r.workspace_id = $2 and r.status <> 'ended'`,
@@ -428,7 +455,8 @@ export function documentRoutes(app: FastifyInstance, pool: pg.Pool, store: Objec
     const data = decryptFile(await store.get(row.storage_key), row.wrapped_key);
     await tx(pool, async (c) => {
       await c.query('insert into document_access (document_id, accessor_user_id, workspace_id, page) values ($1,$2,$3,$4)', [claims.d, claims.u, claims.w, claims.p]);
-      if (claims.w) await writeAudit(c, { workspaceId: claims.w, actorId: claims.u, action: 'document.viewed', targetType: 'document', targetId: claims.d, metadata: { page: claims.p }, ip: req.ip });
+      if (grantId) await c.query('insert into shared_access_log (grant_id, patient_id, workspace_id, accessor_user_id, item_type, item_id) values ($1,$2,$3,$4,$5,$6)', [grantId, row.patient_id, claims.w, claims.u, 'document', claims.d]);
+      if (claims.w) await writeAudit(c, { workspaceId: claims.w, actorId: claims.u, action: grantId ? 'shared_item.viewed' : 'document.viewed', targetType: 'document', targetId: claims.d, metadata: { page: claims.p }, ip: req.ip });
     });
     reply
       .header('content-type', row.mime)

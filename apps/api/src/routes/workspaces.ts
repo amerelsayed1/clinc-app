@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type pg from 'pg';
 import { z } from 'zod';
 import { PERMISSIONS, ROLE_DEFAULTS, effectivePermissions, type Role } from '@clinic/shared';
-import { audit, verifyChain, writeAudit } from '../audit.js';
+import { audit, auditFilterSchema, presentAudit, queryAudit, verifyChain, writeAudit } from '../audit.js';
 import { authenticate, newInviteCode, requireWorkspace, sha256, type SmsSender } from '../auth.js';
 import { config } from '../config.js';
 import { tx } from '../db.js';
@@ -43,7 +43,7 @@ export function workspaceRoutes(app: FastifyInstance, pool: pg.Pool, sms: SmsSen
     const rows = (
       await pool.query(
         `select m.id, m.user_id, m.role, m.status, m.denied_permissions, m.created_at, u.full_name, u.phone,
-                coalesce(d.verification_status = 'verified', false) as doctor_verified
+                coalesce(d.verification_status = 'verified' and u.mfa_enabled_at is not null, false) as doctor_verified
            from memberships m join users u on u.id = m.user_id left join doctor_profiles d on d.user_id = m.user_id
           where m.workspace_id = $1 and m.status <> 'removed' order by m.created_at`,
         [req.workspace!.workspaceId],
@@ -79,6 +79,12 @@ export function workspaceRoutes(app: FastifyInstance, pool: pg.Pool, sms: SmsSen
       })
     ).rows[0];
     await sms.send(body.phone, `You were invited to a clinic workspace. Sign in and enter code ${code}`);
+    // In-app notice for invitees who already have an account (the SMS above carries the code).
+    const invitee = (await pool.query('select id from users where phone = $1', [body.phone])).rows[0];
+    if (invitee) {
+      const w = (await pool.query('select name from workspaces where id = $1', [ws.workspaceId])).rows[0];
+      await app.notifier.notify({ userId: invitee.id, type: 'staff_invited', key: `staff-invited:${inv.id}`, params: { clinicName: w?.name ?? '', role: body.role, invitationId: inv.id } });
+    }
     reply.code(201);
     return { id: inv.id, code, expiresAt: inv.expires_at };
   });
@@ -106,7 +112,7 @@ export function workspaceRoutes(app: FastifyInstance, pool: pg.Pool, sms: SmsSen
   app.post('/invitations/accept', authed, async (req) => {
     const { code } = z.object({ code: z.string().trim().toUpperCase().min(6).max(20) }).parse(req.body);
     const userId = req.auth!.userId;
-    return tx(pool, async (c) => {
+    const out = await tx(pool, async (c) => {
       const inv = (await c.query('select * from invitations where code_hash = $1 for update', [sha256(code)])).rows[0];
       const user = (await c.query('select phone from users where id = $1', [userId])).rows[0];
       // Same error for every failure so codes cannot be probed.
@@ -121,8 +127,10 @@ export function workspaceRoutes(app: FastifyInstance, pool: pg.Pool, sms: SmsSen
         )
       ).rows[0];
       await writeAudit(c, { workspaceId: inv.workspace_id, actorId: userId, actorRole: inv.role, action: 'invitation.accepted', targetType: 'membership', targetId: m.id, ip: req.ip });
-      return { workspaceId: inv.workspace_id, role: inv.role as Role };
+      return { workspaceId: inv.workspace_id, role: inv.role as Role, invitationId: inv.id as string, invitedBy: inv.invited_by as string };
     });
+    await app.notifier.notify({ userId: out.invitedBy, type: 'staff_joined', key: `staff-joined:${out.invitationId}`, params: { role: out.role, invitationId: out.invitationId } });
+    return { workspaceId: out.workspaceId, role: out.role };
   });
 
   // F02-3/4: per-staff permission denials, suspension, removal. Access ends on the very next request.
@@ -159,17 +167,28 @@ export function workspaceRoutes(app: FastifyInstance, pool: pg.Pool, sms: SmsSen
     reply.code(204);
   });
 
+  // F11-3: filterable view of the workspace's own chain. Reading it is not itself audited (it would drown the log).
   app.get('/workspace/audit', guard('audit.read'), async (req) => {
-    const q = z.object({ limit: z.coerce.number().int().min(1).max(200).default(50), before: z.coerce.number().int().optional() }).parse(req.query);
-    const rows = (
-      await pool.query(
-        `select a.seq, a.action, a.actor_id, a.actor_role, a.target_type, a.target_id, a.metadata, a.created_at, u.full_name as actor_name
-           from audit_log a left join users u on u.id = a.actor_id
-          where a.chain_key = $1 and ($2::int is null or a.seq < $2) order by a.seq desc limit $3`,
-        [req.workspace!.workspaceId, q.before ?? null, q.limit],
-      )
-    ).rows;
-    return rows.map((r) => ({ seq: r.seq, action: r.action, actorId: r.actor_id, actorName: r.actor_name, actorRole: r.actor_role, targetType: r.target_type, targetId: r.target_id, metadata: r.metadata, createdAt: r.created_at }));
+    const q = auditFilterSchema.parse(req.query);
+    return (await queryAudit(pool, req.workspace!.workspaceId, q)).map(presentAudit);
+  });
+
+  // JSON export for external review. The export is itself an audited event and carries the chain verification result.
+  app.get('/workspace/audit/export', guard('audit.read'), async (req, reply) => {
+    const q = auditFilterSchema.parse(req.query);
+    const ws = req.workspace!;
+    const rows = await queryAudit(pool, ws.workspaceId, q, 5000);
+    await tx(pool, (c) =>
+      writeAudit(c, { workspaceId: ws.workspaceId, actorId: req.auth!.userId, actorRole: ws.role, action: 'audit.exported', targetType: 'workspace', targetId: ws.workspaceId, metadata: { filters: { ...q, limit: undefined }, rows: rows.length }, ip: req.ip }),
+    );
+    reply.header('content-disposition', `attachment; filename="audit-${ws.workspaceId}.json"`);
+    return {
+      exportedAt: new Date().toISOString(),
+      workspaceId: ws.workspaceId,
+      filters: q,
+      chain: await verifyChain(pool, ws.workspaceId),
+      entries: rows.map((r) => ({ ...presentAudit(r), prevHash: r.prev_hash, hash: r.hash })),
+    };
   });
 
   app.get('/workspace/audit/verify', guard('audit.read'), async (req) => verifyChain(pool, req.workspace!.workspaceId));

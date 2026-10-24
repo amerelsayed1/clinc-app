@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type pg from 'pg';
 import { effectivePermissions, type Permission, type Role } from '@clinic/shared';
+import { audit } from './audit.js';
 import { config } from './config.js';
 import { AppError, forbidden, unauthorized } from './errors.js';
 
@@ -87,6 +88,20 @@ export function authenticate(pool: pg.Pool) {
   };
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Refused attempts are written to the workspace chain (F11-1 result=denied), at most once a minute per user/route/permission.
+const recentDenials = new Map<string, number>();
+async function auditDenied(pool: pg.Pool, req: FastifyRequest, workspaceId: string, role: string, permission: string) {
+  const route = req.routeOptions?.url ?? req.url.split('?')[0];
+  const key = `${req.auth!.userId}|${req.method}|${route}|${permission}`;
+  const now = Date.now();
+  if ((recentDenials.get(key) ?? 0) > now - 60_000) return;
+  recentDenials.set(key, now);
+  if (recentDenials.size > 5000) for (const [k, t] of recentDenials) if (t < now - 60_000) recentDenials.delete(k);
+  await audit(pool, { workspaceId, actorId: req.auth!.userId, actorRole: role, action: 'access.denied', result: 'denied', metadata: { permission, method: req.method, route } }).catch(() => undefined);
+}
+
 /**
  * Resolves the caller's active workspace membership and effective permissions on every request.
  * Optional `x-workspace-id` selects among several memberships (future multi-clinic users).
@@ -95,10 +110,12 @@ export function requireWorkspace(pool: pg.Pool, ...needed: Permission[]) {
   return async (req: FastifyRequest) => {
     if (!req.auth) throw unauthorized();
     const wanted = req.headers['x-workspace-id'];
+    if (typeof wanted === 'string' && !UUID.test(wanted)) throw new AppError(400, 'bad_workspace_id', 'x-workspace-id must be a UUID');
     const rows = (
       await pool.query(
-        `select m.id, m.workspace_id, m.role, m.denied_permissions, coalesce(d.verification_status = 'verified', false) as doctor_verified
+        `select m.id, m.workspace_id, m.role, m.denied_permissions, coalesce(d.verification_status = 'verified' and u.mfa_enabled_at is not null, false) as doctor_verified
            from memberships m
+           join users u on u.id = m.user_id
            left join doctor_profiles d on d.user_id = m.user_id
           where m.user_id = $1 and m.status = 'active' and ($2::uuid is null or m.workspace_id = $2::uuid)
           order by m.created_at`,
@@ -109,7 +126,10 @@ export function requireWorkspace(pool: pg.Pool, ...needed: Permission[]) {
     if (!m) throw forbidden('No active workspace membership');
     const permissions = effectivePermissions({ role: m.role, denied: m.denied_permissions, doctorVerified: m.doctor_verified });
     for (const p of needed) {
-      if (!permissions.includes(p)) throw new AppError(403, 'missing_permission', `Missing permission: ${p}`);
+      if (!permissions.includes(p)) {
+        await auditDenied(pool, req, m.workspace_id, m.role, p);
+        throw new AppError(403, 'missing_permission', `Missing permission: ${p}`);
+      }
     }
     req.workspace = { workspaceId: m.workspace_id, membershipId: m.id, role: m.role, permissions };
   };

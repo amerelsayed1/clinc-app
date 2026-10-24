@@ -67,3 +67,39 @@ textarea { display: block; width: 100%; padding: .5rem; margin-top: .25rem; bord
   main { padding: 0; max-width: none; }
   .rx-sheet { padding: 0; }
 }
+.shared-banner { background: #fff6dd; border: 1px solid #f0dc9b; border-radius: 6px; margin-bottom: .75rem; }
+.shared-page { display: block; max-width: 100%; margin: 0 0 1rem; border: 1px solid #dde3ea; background: #fff; }
+.flag { background: #fff0d6; color: #8a4b00; border: 1px solid #f0c98a; border-radius: 4px; padding: .05rem .4rem; font-size: .75rem; margin-left: .4rem; }
+tr.flagged td { background: #fffaf0; }
+.followup-meas { margin-top: 1rem; }
+.trend-chart { border: 1px solid #dde3ea; background: #fff; border-radius: 6px; }
+.meas-row { display: grid; grid-template-columns: 1.2fr 1.4fr .8fr .9fr .7fr .7fr auto; gap: .4rem; margin-bottom: .4rem; align-items: center; }
+.meas-row input, .meas-row select { margin: 0; }
+.attention { background: #fff; border: 1px solid #f0c98a; border-left: 4px solid #e0a030; border-radius: 6px; padding: .6rem 1rem; margin-bottom: 1rem; }
+.attention h3 { margin: 0 0 .4rem; }
+.attention ul { margin: 0; padding-left: 1.1rem; }
+
+.chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; align-items: center; }
+.chip { background: #fff; color: #46566a; border-color: #c4cdd8; border-radius: 99px; padding: .25rem .7rem; font-size: .85rem; }
+.chip.on { background: #e4eefc; color: #0b5cd5; border-color: #0b5cd5; }
+.tl-list { list-style: none; margin: 0 0 1rem; padding: 0; border-left: 2px solid #dde3ea; }
+.tl-item { display: flex; gap: .75rem; padding: .6rem 0 .6rem .9rem; }
+.tl-item.shared .tl-body { background: #fffaf0; border-radius: 6px; padding: .4rem .6rem; }
+.tl-icon { font-size: 1.2rem; }
+.tl-head { margin-bottom: .2rem; gap: .4rem; }
+.pill.badge-patient_submitted { background: #fff6dd; color: #8a6100; }
+.pill.badge-reviewed { background: #e2f5e9; color: #1b7a3d; }
+
+.bell { position: relative; text-decoration: none; }
+.bell .badge { position: absolute; top: -.35rem; right: -.45rem; background: #b3261e; color: #fff; border-radius: 99px; font-size: .65rem; padding: .05rem .35rem; }
+.notif-list { list-style: none; margin: 0 0 1rem; padding: 0; }
+.notif { display: flex; gap: .75rem; align-items: center; background: #fff; border: 1px solid #dde3ea; border-radius: 6px; padding: .6rem .9rem; margin-bottom: .5rem; }
+.notif.unread { border-inline-start: 4px solid #0b5cd5; background: #f4f8ff; }
+
+/* Spec 11: audit filters and break-glass rows */
+.filters { display: flex; flex-wrap: wrap; gap: .5rem; align-items: end; margin-bottom: 1rem; }
+.filters label { display: flex; flex-direction: column; font-size: .8rem; color: #6b7a8c; gap: .15rem; }
+tr.breakglass td { background: #fde8e6; border-top: 2px solid #b3261e; font-weight: 600; }
+tr.denied td { background: #fff6dd; }
+.pill.badge-denied { background: #fff6dd; color: #8a6100; }
+.pill.badge-breakglass { background: #b3261e; color: #fff; }

@@ -4,7 +4,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { VITAL_KEYS, VITAL_KINDS, type VitalKind } from '@clinic/shared';
 import { ApiError, api, type Appointment, type EncounterSummary, type Patient } from '../api';
 import { fmtDateTime } from '../time';
+import { AccessRequestsSection } from './SharedWithMePage';
 import { DocumentsSection } from './DocumentsSection';
+import { FollowupSection } from './FollowupSection';
+import { TimelineSection } from './TimelineSection';
 import { useSettings } from './AppointmentsPage';
 
 const STATUS_LABEL = { active: 'Active', invited: 'Awaiting patient confirmation', ended: 'Ended' } as const;
@@ -112,6 +115,7 @@ export function PatientDetailPage({ can }: { can: (p: string) => boolean }) {
   const qc = useQueryClient();
   const p = useQuery({ queryKey: ['patient', id], queryFn: () => api<Patient>(`/patients/${id}`) });
   const [editing, setEditing] = useState(false);
+  const [tab, setTab] = useState<'overview' | 'timeline'>('overview');
   const reload = () => {
     qc.invalidateQueries({ queryKey: ['patient', id] });
     qc.invalidateQueries({ queryKey: ['patients'] });
@@ -148,11 +152,21 @@ export function PatientDetailPage({ can }: { can: (p: string) => boolean }) {
           {d.endedAt && (<><dt>Ended</dt><dd>{new Date(d.endedAt).toLocaleDateString()} by {d.endedBy}</dd></>)}
         </dl>
       )}
+      {can('clinical.read') && (
+        <div className="tabs" role="tablist">
+          <button role="tab" aria-selected={tab === 'overview'} className={tab === 'overview' ? 'active' : ''} onClick={() => setTab('overview')}>Overview</button>
+          <button role="tab" aria-selected={tab === 'timeline'} className={tab === 'timeline' ? 'active' : ''} onClick={() => setTab('timeline')}>Timeline</button>
+        </div>
+      )}
+      {tab === 'timeline' && can('clinical.read') && <TimelineSection patientId={d.id} onOpenDocuments={() => setTab('overview')} />}
+      {tab === 'overview' && <>
       {can('clinical.read') && <PatientEncounters patient={d} canCreate={can('clinical.write') && d.status !== 'ended'} />}
       {can('clinical.read') && <Trend patientId={d.id} />}
+      {can('clinical.read') && <FollowupSection patientId={d.id} canWrite={can('clinical.write') && d.status !== 'ended'} />}
+      {can('clinical.read') && <AccessRequestsSection patientId={d.id} patientName={d.fullName} canRequest={can('clinical.write') && d.status === 'active'} hasAccount={d.hasAccount} />}
       {can('patients.read') && <DocumentsSection patientId={d.id} can={can} />}
       {can('appointments.read') && <PatientAppointments id={d.id} />}
-      <p className="muted">The combined medical timeline arrives in the next feature.</p>
+      </>}
     </section>
   );
 }

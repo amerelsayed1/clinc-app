@@ -11,7 +11,7 @@ export function meRoutes(app: FastifyInstance, pool: pg.Pool) {
 
   app.get('/me', authed, async (req) => {
     const userId = req.auth!.userId;
-    const user = (await pool.query('select id, phone, full_name, is_platform_admin from users where id = $1', [userId])).rows[0];
+    const user = (await pool.query('select id, phone, full_name, is_platform_admin, mfa_enabled_at from users where id = $1', [userId])).rows[0];
     const doctor = (await pool.query('select license_number, verification_status, verification_note from doctor_profiles where user_id = $1', [userId])).rows[0];
     const memberships = (
       await pool.query(
@@ -21,12 +21,15 @@ export function meRoutes(app: FastifyInstance, pool: pg.Pool) {
         [userId],
       )
     ).rows;
-    const verified = doctor?.verification_status === 'verified';
+    const mfaEnabled = !!user.mfa_enabled_at;
+    const verified = doctor?.verification_status === 'verified' && mfaEnabled; // F01-3: clinical actions need a verified licence and MFA
     return {
       id: user.id,
       phone: user.phone,
       fullName: user.full_name,
       isPlatformAdmin: user.is_platform_admin,
+      mfaEnabled,
+      mfaRequired: !!doctor || user.is_platform_admin,
       doctorProfile: doctor ? { licenseNumber: doctor.license_number, verificationStatus: doctor.verification_status, verificationNote: doctor.verification_note } : null,
       memberships: memberships.map((m) => ({
         id: m.id,

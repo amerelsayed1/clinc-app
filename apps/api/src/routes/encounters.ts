@@ -7,6 +7,7 @@ import { authenticate, workspaceGuard } from '../auth.js';
 import { tx } from '../db.js';
 import { createDraftEncounter } from '../encounter-store.js';
 import { AppError, badRequest, conflict, forbidden, notFound } from '../errors.js';
+import { relationshipRecipient } from '../notifications.js';
 
 const text = z.string().max(10_000);
 const rxItem = z.object({
@@ -143,6 +144,11 @@ export function encounterRoutes(app: FastifyInstance, pool: pg.Pool) {
     ip: req.ip,
   });
 
+  // A relationship id from another clinic is "not found", never an empty list (and never an audit entry about a foreign record).
+  const requireRelationship = async (workspaceId: string, id: string) => {
+    if (!(await pool.query('select 1 from care_relationships where id = $1 and workspace_id = $2', [id, workspaceId])).rowCount) throw notFound('Patient not found');
+  };
+
   const requireAuthor = (e: Loaded, userId: string) => {
     if (e.author_id !== userId) throw forbidden('Only the author can change this encounter');
   };
@@ -150,6 +156,7 @@ export function encounterRoutes(app: FastifyInstance, pool: pg.Pool) {
   // ---------- list / create ----------
   app.get('/patients/:id/encounters', read, async (req) => {
     const { id } = idParam.parse(req.params);
+    await requireRelationship(req.workspace!.workspaceId, id);
     const rows = (
       await pool.query(
         `select e.id, e.encounter_date, e.status, e.current_version, e.published_version, e.appointment_id, u.full_name as author_name,
@@ -162,6 +169,7 @@ export function encounterRoutes(app: FastifyInstance, pool: pg.Pool) {
         [id, req.workspace!.workspaceId],
       )
     ).rows;
+    await tx(pool, (c) => writeAudit(c, { ...ctxAudit(req), action: 'patient.encounters_listed', targetType: 'patient', targetId: id, metadata: { count: rows.length } }));
     return rows.map((r) => ({
       id: r.id,
       encounterDate: r.encounter_date,
@@ -349,6 +357,7 @@ export function encounterRoutes(app: FastifyInstance, pool: pg.Pool) {
     const { id } = idParam.parse(req.params);
     const { kind } = z.object({ kind: z.enum(VITAL_KEYS) }).parse(req.query);
     const ws = req.workspace!;
+    await requireRelationship(ws.workspaceId, id);
     const rows = (
       await pool.query(
         `select o.id, o.value, o.measured_at, o.encounter_id, o.recorded_role
@@ -358,6 +367,7 @@ export function encounterRoutes(app: FastifyInstance, pool: pg.Pool) {
         [id, ws.workspaceId, kind],
       )
     ).rows;
+    await tx(pool, (c) => writeAudit(c, { ...ctxAudit(req), action: 'patient.observations_viewed', targetType: 'patient', targetId: id, metadata: { kind } }));
     return { kind, unit: VITAL_KINDS[kind].unit, points: rows.map((r) => ({ id: r.id, value: Number(r.value), measuredAt: r.measured_at, encounterId: r.encounter_id, recordedRole: r.recorded_role })) };
   });
 
@@ -366,14 +376,22 @@ export function encounterRoutes(app: FastifyInstance, pool: pg.Pool) {
     const { id } = idParam.parse(req.params);
     const { version } = z.object({ version: z.number().int().min(1).optional() }).parse(req.body ?? {});
     const ws = req.workspace!;
+    let published: { relationshipId: string; version: number } | null = null;
     await tx(pool, async (c) => {
       const e = await load(c, id, ws.workspaceId, true);
       if (e.status !== 'signed') throw conflict('invalid_state', 'Only signed encounters can be published');
       const v = version ?? e.current_version;
+      published = { relationshipId: e.care_relationship_id, version: v };
       if (v > e.current_version) throw badRequest('invalid_version', 'Unknown version');
       await c.query('update encounters set published_version = $2, published_at = now(), published_by = $3 where id = $1', [id, v, req.auth!.userId]);
       await writeAudit(c, { ...ctxAudit(req), action: 'encounter.published', targetType: 'encounter', targetId: id, metadata: { version: v } });
     });
+    // Generic push/SMS; the inbox says only that a visit summary exists. Once per published version.
+    if (published) {
+      const p: { relationshipId: string; version: number } = published;
+      const to = await relationshipRecipient(pool, p.relationshipId);
+      if (to) await app.notifier.notify({ userId: to.userId, type: 'encounter_published', key: `encounter-published:${id}:${p.version}`, params: { clinicName: to.clinicName, encounterId: id } });
+    }
     return detail(pool, await load(pool, id, ws.workspaceId), ws.role);
   });
 

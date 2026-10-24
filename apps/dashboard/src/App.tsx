@@ -4,10 +4,14 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { api, tokens, type Me } from './api';
 import { AppointmentsPage } from './pages/AppointmentsPage';
 import { AuditPage } from './pages/AuditPage';
+import { DataRequestsPage } from './pages/DataRequestsPage';
 import { EncounterPage, PrescriptionPage } from './pages/EncounterPage';
 import { LoginPage } from './pages/LoginPage';
+import { NotificationBell, NotificationPreferencesPage, NotificationsPage } from './pages/NotificationsPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { PatientDetailPage, PatientsPage } from './pages/PatientsPage';
+import { MfaGate, SecurityPage } from './pages/SecurityPage';
+import { SharedDocumentPage, SharedEncounterPage, SharedGrantPage, SharedWithMePage } from './pages/SharedWithMePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { TeamPage } from './pages/TeamPage';
 
@@ -31,6 +35,7 @@ export function App() {
   if (me.isError || !me.data) return <p className="center">Could not load your account. <button onClick={() => tokens.set(null)}>Sign in again</button></p>;
 
   const user = me.data;
+  if (user.mfaRequired && !user.mfaEnabled) return <MfaGate me={user} />;
   const membership = user.memberships[0];
   if (!membership) return <OnboardingPage me={user} />;
 
@@ -48,11 +53,15 @@ export function App() {
         <nav>
           {can('appointments.read') && <NavLink to="/appointments">Appointments</NavLink>}
           {can('patients.read') && <NavLink to="/patients">Patients</NavLink>}
+          {can('clinical.read') && <NavLink to="/shared">Shared with me</NavLink>}
           {can('staff.manage') && <NavLink to="/team">Team</NavLink>}
           {can('staff.manage') && <NavLink to="/settings">Settings</NavLink>}
           {can('audit.read') && <NavLink to="/audit">Audit log</NavLink>}
+          {can('staff.manage') && can('clinical.read') && <NavLink to="/data-requests">Data requests</NavLink>}
         </nav>
         <span className="spacer" />
+        <NotificationBell />
+        <NavLink to="/security">Security</NavLink>
         <span className="muted">
           {user.fullName ?? user.phone} · {membership.role}
         </span>
@@ -65,13 +74,21 @@ export function App() {
       <main>
         <Routes>
           <Route path="/appointments" element={can('appointments.read') ? <AppointmentsPage can={can} /> : <Navigate to="/" />} />
+          <Route path="/security" element={<SecurityPage me={user} />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/notifications/preferences" element={<NotificationPreferencesPage />} />
           <Route path="/settings" element={can('staff.manage') ? <SettingsPage /> : <Navigate to="/" />} />
           <Route path="/encounters/:id" element={can('clinical.read') ? <EncounterPage can={can} /> : <Navigate to="/" />} />
           <Route path="/encounters/:id/prescription" element={can('clinical.read') ? <PrescriptionPage /> : <Navigate to="/" />} />
           <Route path="/patients" element={can('patients.read') ? <PatientsPage can={can} /> : <Navigate to="/" />} />
           <Route path="/patients/:id" element={can('patients.read') ? <PatientDetailPage can={can} /> : <Navigate to="/" />} />
+          <Route path="/shared" element={can('clinical.read') ? <SharedWithMePage /> : <Navigate to="/" />} />
+          <Route path="/shared/:id" element={can('clinical.read') ? <SharedGrantPage /> : <Navigate to="/" />} />
+          <Route path="/shared/:id/encounters/:encId" element={can('clinical.read') ? <SharedEncounterPage /> : <Navigate to="/" />} />
+          <Route path="/shared/:id/documents/:docId" element={can('clinical.read') ? <SharedDocumentPage /> : <Navigate to="/" />} />
           <Route path="/team" element={can('staff.manage') ? <TeamPage /> : <Navigate to="/" />} />
           <Route path="/audit" element={can('audit.read') ? <AuditPage /> : <Navigate to="/" />} />
+          <Route path="/data-requests" element={can('staff.manage') && can('clinical.read') ? <DataRequestsPage canDecide={can('clinical.write')} /> : <Navigate to="/" />} />
           <Route
             path="*"
             element={
