@@ -15,6 +15,17 @@ void main() {
     expect(await h.api.post('/empty'), isNull);
   });
 
+  test('sends extraHeaders on every request', () async {
+    final h = Harness((req) {
+      expect(req.headers['x-workspace-id'], 'w1');
+      return jsonRes(200, {'ok': true});
+    }, tokens: const TokenPair('a1', 'r1'));
+    await h.api.init();
+    h.api.extraHeaders['x-workspace-id'] = 'w1';
+    expect(await h.api.get('/x'), {'ok': true});
+    expect(await h.api.post('/y', body: {}), {'ok': true});
+  });
+
   test('maps error body to ApiException', () async {
     final h = Harness((_) => jsonRes(403, {'error': 'mfa_required', 'message': 'MFA is required'}));
     await expectLater(

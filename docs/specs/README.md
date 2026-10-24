@@ -20,13 +20,13 @@ Priority: **P0** = MVP, **P1** = Phase 2. IDs are `F<spec>-<n>`.
 
 ## Stack and delivery approach
 
-Backend: Node.js (TypeScript, Fastify) + PostgreSQL. Clinic UI: React dashboard. Mobile (Flutter): `apps/patient`, `apps/admin`, sharing `packages/clinic_core`. Features are delivered as **vertical slices across every app** (migration + API + dashboard + patient app + admin app + tests + spec status): a feature is not done until each app that needs it has it.
+Backend: Node.js (TypeScript, Fastify) + PostgreSQL. Clinic UI: Flutter mobile app `apps/clinic` (replaced the original React dashboard, which was removed). Mobile (Flutter): `apps/patient`, `apps/admin`, sharing `packages/clinic_core`. Features are delivered as **vertical slices across every app** (migration + API + dashboard + patient app + admin app + tests + spec status): a feature is not done until each app that needs it has it.
 
 ## Implementation status
 
 | Spec | Status |
 |------|--------|
-| 01 Identity & Auth | **Done except:** email sign-up (optional), passwordless TOTP only (no SMS fallback factor), QR rendering of the authenticator key. Delivered across the dashboard, patient app and admin app together |
+| 01 Identity & Auth | **Done except:** email sign-up (optional), passwordless TOTP only (no SMS fallback factor), QR rendering of the authenticator key. Delivered across the clinic, patient and admin apps together |
 | 02 Clinic & Staff | **Done** (F02-1…F02-6). Custom roles beyond per-permission denial are P1 |
 | 03 Patients & Relationships | **Done except:** manual duplicate merge (F03-5, needs record tables from spec 05/06 first; detection + override warning is done), dependents (out of MVP). Patient-side API exists (claim, accept, decline, end); no patient UI yet |
 | 04 Appointments | **Done except:** reminders / cancellation notices (F04-7, spec 10) |
